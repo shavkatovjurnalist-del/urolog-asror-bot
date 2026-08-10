@@ -9,7 +9,7 @@ import asyncio
 
 import httpx
 
-from app.config import BASE_URL, BOT_TOKEN, WEBAPP_URL, WEBHOOK_PATH
+from app.config import BASE_URL, BOT_TOKEN, WEBHOOK_PATH
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
@@ -44,14 +44,12 @@ async def main() -> None:
             print("⚠️  BASE_URL https emas — webhook va Mini App tugmasi o'rnatilmadi.")
             return
 
+        # Mini App klaviaturadagi tugma orqali ochiladi — yuqoridagi menyu tugmasi
+        # standart («Menu» / komandalar) holatida qoldiriladi.
         r = (await c.post(f"{API}/setChatMenuButton", json={
-            "menu_button": {
-                "type": "web_app",
-                "text": "Sayt",
-                "web_app": {"url": WEBAPP_URL},
-            }
+            "menu_button": {"type": "commands"}
         })).json()
-        print("setChatMenuButton:", r.get("ok"), r.get("description", ""))
+        print("setChatMenuButton (commands):", r.get("ok"), r.get("description", ""))
 
         r = (await c.post(f"{API}/setWebhook", json={
             "url": f"{BASE_URL}{WEBHOOK_PATH}",

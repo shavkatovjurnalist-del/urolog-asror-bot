@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from aiogram.types import MenuButtonWebApp, Update, WebAppInfo
+from aiogram.types import MenuButtonCommands, Update
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -38,9 +38,9 @@ async def lifespan(app: FastAPI):
             drop_pending_updates=True,
             allowed_updates=["message", "callback_query", "my_chat_member"],
         )
-        await bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(text="Sayt", web_app=WebAppInfo(url=WEBAPP_URL))
-        )
+        # Mini App'ga kirish faqat klaviaturadagi «🌐 Sayt (Mini App)» tugmasi orqali.
+        # Yuqoridagi menyu tugmasi ikkilanish bo'lmasligi uchun standart holatga qaytarilgan.
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
         log.info("Webhook o'rnatildi: %s%s", BASE_URL, WEBHOOK_PATH)
     else:
         log.warning("BASE_URL https emas — webhook o'rnatilmadi (lokal rejim).")
