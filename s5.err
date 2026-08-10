@@ -1,0 +1,5 @@
+INFO:     Started server process [35180]
+INFO:     Waiting for application startup.
+2026-08-10 11:51:56,824 WARNING urolog-bot: BASE_URL https emas — webhook o'rnatilmadi (lokal rejim).
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8091 (Press CTRL+C to quit)

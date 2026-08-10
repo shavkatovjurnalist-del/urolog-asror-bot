@@ -22,18 +22,14 @@ log = logging.getLogger("urolog-bot")
 async def lifespan(app: FastAPI):
     await init_db()
 
-    # Kontent bo'sh bo'lsa — saytdan olingan ma'lumotlarni yuklaymiz
-    from sqlalchemy import func, select
+    # Kontentni har safar sinxronlaymiz (upsert) — `app/seed.py` ni tahrirlab
+    # push qilish kifoya, deploy'dan keyin o'zgarish avtomatik qo'llanadi.
+    from app.seed import seed
 
-    from app.db import SessionLocal
-    from app.models import Service
-
-    async with SessionLocal() as s:
-        count = (await s.execute(select(func.count(Service.id)))).scalar()
-    if not count:
-        from app.seed import seed
-
+    try:
         await seed()
+    except Exception as e:  # kontent xatosi botni to'xtatmasin
+        log.exception("Kontent yuklashda xato: %s", e)
 
     if BASE_URL.startswith("https://"):
         await bot.set_webhook(
