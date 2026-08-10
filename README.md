@@ -104,6 +104,22 @@ Qo'lda: `python -m scripts.setup_bot`
 > ~50 soniya sekin). [cron-job.org](https://cron-job.org) da har 10 daqiqada
 > `https://<servis>.onrender.com/health` ni chaqirsangiz — doim uyg'oq turadi.
 
+## Kodni yangilash
+
+Servis Render API orqali yaratilgani uchun GitHub bilan avtomatik bog'lanish yo'q —
+push qilingandan keyin deploy'ni qo'lda ishga tushirish kerak:
+
+```bash
+git push
+curl -s -X POST -H "Authorization: Bearer <RENDER_API_KEY>" \
+  -H "Content-Type: application/json" \
+  https://api.render.com/v1/services/srv-d9so6rn40ujc73djrk60/deploys \
+  -d '{"clearCache":"do_not_clear"}'
+```
+
+Avtomatik deploy kerak bo'lsa: Render dashboard → servis → `Settings` → `Build & Deploy`
+→ GitHub akkauntini bir marta ulash. Shundan keyin har push o'zi deploy bo'ladi.
+
 ## Kontentni yangilash
 
 Matn, xizmat, klinika yoki video qo'shish → `app/seed.py` ni tahrirlang va:
