@@ -13,3 +13,5 @@ server*.err
 polling.log
 polling.err
 .claude/
+*.log
+*.err
