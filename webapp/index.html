@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Dr. Asror To'rayev — Urolog-Androlog</title>
+  <meta name="theme-color" content="#007a70" />
+  <link rel="icon" href="assets/logo.jpg" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="splash" class="splash">
+    <div class="splash-logo">⚕️</div>
+    <div class="splash-text">Yuklanmoqda…</div>
+  </div>
+
+  <main id="app" hidden>
+    <!-- ══════════ BOSH SAHIFA ══════════ -->
+    <section class="page" id="page-home">
+      <header class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-inner">
+          <img class="hero-photo" id="doc-photo" alt="Shifokor" />
+          <h1 class="hero-name" id="doc-name"></h1>
+          <p class="hero-role" id="doc-role"></p>
+          <div class="chips">
+            <span class="chip" id="doc-cat"></span>
+            <span class="chip" id="doc-exp"></span>
+            <span class="chip">📍 Samarqand</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="quick">
+        <button class="quick-btn primary" data-action="book">
+          <span class="qi">📅</span><span>Qabulga yozilish</span>
+        </button>
+        <button class="quick-btn" data-action="call">
+          <span class="qi">📞</span><span>Qo'ng'iroq</span>
+        </button>
+        <button class="quick-btn" data-action="tg">
+          <span class="qi">✈️</span><span>Telegram</span>
+        </button>
+      </div>
+
+      <div class="section">
+        <h2 class="sec-title">Shifokor haqida</h2>
+        <div class="card">
+          <p class="bio" id="doc-bio"></p>
+          <div class="hours" id="doc-hours"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2 class="sec-title">Nega aynan men?</h2>
+        <div class="adv-grid" id="advantages"></div>
+      </div>
+
+      <div class="section">
+        <h2 class="sec-title">Haqiqiy natijalar</h2>
+        <p class="sec-sub">Bemorlarning davolanish jarayoni va natijalari</p>
+        <div class="video-row" id="results"></div>
+      </div>
+
+      <div class="section">
+        <h2 class="sec-title">Savol-javob</h2>
+        <div class="faq" id="faq"></div>
+      </div>
+
+      <div class="section">
+        <h2 class="sec-title">Aloqa</h2>
+        <div class="card contact-card">
+          <a class="contact-row" id="link-phone"><span>📱</span><b id="doc-phone"></b></a>
+          <a class="contact-row" id="link-tg" target="_blank"><span>✈️</span><b>Telegram</b></a>
+          <a class="contact-row" id="link-ig" target="_blank"><span>📸</span><b>Instagram</b></a>
+          <a class="contact-row" id="link-yt" target="_blank"><span>▶️</span><b>YouTube</b></a>
+          <a class="contact-row" id="link-site" target="_blank"><span>🌐</span><b>urologasrorturayev.uz</b></a>
+        </div>
+      </div>
+
+      <p class="disclaimer">
+        Ushbu ilovadagi ma'lumotlar tanishtiruv xarakteriga ega va shifokor ko'rigi
+        o'rnini bosmaydi. Aniq tashxis uchun qabulga yoziling.
+      </p>
+    </section>
+
+    <!-- ══════════ XIZMATLAR ══════════ -->
+    <section class="page" id="page-services" hidden>
+      <div class="page-head">
+        <h1>Xizmatlar</h1>
+        <p>Zamonaviy uskunalar va ilg'or texnologiyalar bilan yuqori sifatli urologik yordam.</p>
+      </div>
+      <div class="list" id="services"></div>
+    </section>
+
+    <!-- ══════════ USULLAR ══════════ -->
+    <section class="page" id="page-methods" hidden>
+      <div class="page-head">
+        <h1>Jarrohlik usullari</h1>
+        <p>Minimal invaziv va xavfsiz davolash texnologiyalari.</p>
+      </div>
+      <div class="list" id="methods"></div>
+    </section>
+
+    <!-- ══════════ MANZILLAR ══════════ -->
+    <section class="page" id="page-clinics" hidden>
+      <div class="page-head">
+        <h1>Qabul joylari</h1>
+        <p>Samarqand shahridagi kliniklarda qabul olib boraman.</p>
+      </div>
+      <div class="list" id="clinics"></div>
+    </section>
+
+    <!-- ══════════ MUROJAAT (AI joyi) ══════════ -->
+    <section class="page" id="page-ask" hidden>
+      <div class="page-head">
+        <h1>Murojaat</h1>
+        <p>Savolingizni yozing — shifokor javob beradi.</p>
+      </div>
+
+      <div class="ai-banner">
+        <div class="ai-icon">🤖</div>
+        <div>
+          <b>AI-konsultant tez orada</b>
+          <span>Yaqin kunlarda savolingizga bir zumda dastlabki javob beriladi.</span>
+        </div>
+      </div>
+
+      <form class="card form" id="ask-form">
+        <label class="fl">Savolingiz yoki shikoyatingiz</label>
+        <textarea id="ask-text" rows="6" placeholder="Masalan: 45 yoshdaman, tunda tez-tez siyish bezovta qilyapti…"></textarea>
+        <button type="submit" class="btn-primary">Yuborish</button>
+        <p class="hint">Javob shu bot orqali keladi.</p>
+      </form>
+
+      <div class="ok-box" id="ask-ok" hidden>
+        <div class="ok-icon">✅</div>
+        <b>Murojaatingiz qabul qilindi</b>
+        <p>Shifokor yoki uning yordamchisi tez orada siz bilan bog'lanadi.</p>
+        <button class="btn-ghost" id="ask-again">Yana savol berish</button>
+      </div>
+    </section>
+
+    <!-- ══════════ QABULGA YOZILISH ══════════ -->
+    <section class="page" id="page-book" hidden>
+      <div class="page-head">
+        <h1>Qabulga yozilish</h1>
+        <p id="book-hours"></p>
+      </div>
+
+      <form class="card form" id="book-form">
+        <label class="fl">Ism-familiya *</label>
+        <input id="b-name" type="text" placeholder="Aliyev Vali" />
+
+        <label class="fl">Telefon raqam *</label>
+        <input id="b-phone" type="tel" inputmode="tel" placeholder="+998 90 123 45 67" />
+
+        <label class="fl">Klinika</label>
+        <select id="b-clinic"></select>
+
+        <label class="fl">Qaysi masala bo'yicha?</label>
+        <select id="b-service"></select>
+
+        <label class="fl">Sizga qulay vaqt</label>
+        <input id="b-time" type="text" placeholder="Masalan: ertaga tushdan keyin" />
+
+        <label class="fl">Qo'shimcha izoh</label>
+        <textarea id="b-comment" rows="3" placeholder="Ixtiyoriy"></textarea>
+
+        <button type="submit" class="btn-primary">Arizani yuborish</button>
+        <p class="hint">Ma'lumotlaringiz faqat shifokor jamoasiga yuboriladi.</p>
+      </form>
+
+      <div class="ok-box" id="book-ok" hidden>
+        <div class="ok-icon">✅</div>
+        <b>Arizangiz qabul qilindi</b>
+        <p id="book-ok-text"></p>
+        <button class="btn-ghost" id="book-close">Bosh sahifaga</button>
+      </div>
+    </section>
+
+    <!-- ══════════ Batafsil oyna ══════════ -->
+    <div class="sheet-wrap" id="sheet" hidden>
+      <div class="sheet-back"></div>
+      <div class="sheet">
+        <div class="sheet-grip"></div>
+        <div class="sheet-body" id="sheet-body"></div>
+        <button class="btn-primary" id="sheet-book">📅 Shu bo'yicha yozilish</button>
+      </div>
+    </div>
+
+    <nav class="tabbar">
+      <button class="tab active" data-page="home"><span>🏠</span>Bosh</button>
+      <button class="tab" data-page="services"><span>🩺</span>Xizmatlar</button>
+      <button class="tab" data-page="methods"><span>🔬</span>Usullar</button>
+      <button class="tab" data-page="clinics"><span>📍</span>Manzil</button>
+      <button class="tab" data-page="ask"><span>💬</span>Murojaat</button>
+    </nav>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

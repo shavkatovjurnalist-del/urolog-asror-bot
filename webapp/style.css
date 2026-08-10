@@ -1,0 +1,302 @@
+/* Dr. Asror To'rayev — Telegram Mini App
+   Rang palitrasi sayt bilan bir xil: teal #007a70 */
+
+:root {
+  --brand: #007a70;
+  --brand-dark: #003732;
+  --brand-deep: #104e64;
+  --brand-soft: #e1f3f0;
+  --brand-soft-2: #f8fdfc;
+
+  --bg: var(--tg-theme-bg-color, #ffffff);
+  --bg-secondary: var(--tg-theme-secondary-bg-color, #f2f5f6);
+  --text: var(--tg-theme-text-color, #0e1a19);
+  --muted: var(--tg-theme-hint-color, #6b7b7a);
+  --link: var(--tg-theme-link-color, #007a70);
+  --card: var(--tg-theme-bg-color, #ffffff);
+  --border: rgba(0, 122, 112, .14);
+  --shadow: 0 2px 14px rgba(10, 40, 38, .07);
+  --radius: 16px;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--tg-theme-bg-color, #14181b);
+    --bg-secondary: var(--tg-theme-secondary-bg-color, #0e1113);
+    --text: var(--tg-theme-text-color, #eef3f2);
+    --muted: var(--tg-theme-hint-color, #93a3a1);
+    --card: var(--tg-theme-bg-color, #1c2124);
+    --border: rgba(255, 255, 255, .1);
+    --brand-soft: rgba(0, 122, 112, .18);
+    --brand-soft-2: rgba(0, 122, 112, .08);
+    --shadow: 0 2px 14px rgba(0, 0, 0, .3);
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* `hidden` atributi flex/grid elementlarda ham ishlashi uchun */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-secondary);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  overscroll-behavior-y: contain;
+}
+
+main { padding-bottom: calc(72px + var(--safe-b)); }
+
+/* ─────────── Splash ─────────── */
+.splash {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: linear-gradient(160deg, var(--brand) 0%, var(--brand-dark) 100%);
+  color: #fff;
+}
+.splash-logo { font-size: 54px; animation: pulse 1.4s ease-in-out infinite; }
+.splash-text { font-size: 14px; opacity: .85; }
+@keyframes pulse { 0%,100% { transform: scale(1); opacity: .9 } 50% { transform: scale(1.12); opacity: 1 } }
+.splash.hide { opacity: 0; pointer-events: none; transition: opacity .4s ease; }
+
+/* ─────────── Hero ─────────── */
+.hero { position: relative; padding: 26px 20px 30px; text-align: center; overflow: hidden; }
+.hero-bg {
+  position: absolute; inset: 0;
+  background: linear-gradient(155deg, var(--brand) 0%, var(--brand-deep) 55%, var(--brand-dark) 100%);
+}
+.hero-bg::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(255,255,255,.16), transparent 45%),
+    radial-gradient(circle at 90% 100%, rgba(255,255,255,.10), transparent 40%);
+}
+.hero-inner { position: relative; }
+.hero-photo {
+  width: 104px; height: 104px; border-radius: 50%; object-fit: cover; object-position: top center;
+  border: 3px solid rgba(255,255,255,.5); box-shadow: 0 8px 26px rgba(0,0,0,.25);
+  background: #fff;
+}
+.hero-name { margin: 12px 0 2px; font-size: 21px; font-weight: 700; color: #fff; letter-spacing: -.2px; }
+.hero-role { margin: 0; font-size: 14px; color: rgba(255,255,255,.85); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 14px; }
+.chip {
+  font-size: 12px; padding: 5px 11px; border-radius: 100px;
+  background: rgba(255,255,255,.17); color: #fff; backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,.2);
+}
+
+/* ─────────── Tezkor tugmalar ─────────── */
+.quick {
+  display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px;
+  padding: 0 14px; margin-top: -18px; position: relative; z-index: 2;
+}
+.quick-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 12px 6px; border: none; border-radius: 14px;
+  background: var(--card); color: var(--text); box-shadow: var(--shadow);
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: transform .12s;
+}
+.quick-btn:active { transform: scale(.96); }
+.quick-btn.primary { background: var(--brand); color: #fff; }
+.qi { font-size: 19px; }
+
+/* ─────────── Bo'limlar ─────────── */
+.section { padding: 22px 14px 0; }
+.sec-title { margin: 0 0 3px; font-size: 17px; font-weight: 700; letter-spacing: -.2px; }
+.sec-sub { margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.sec-title + .card, .sec-title + .adv-grid, .sec-title + .faq, .sec-title + .video-row { margin-top: 10px; }
+
+.card {
+  background: var(--card); border-radius: var(--radius); padding: 15px;
+  box-shadow: var(--shadow); border: 1px solid var(--border);
+}
+.bio { margin: 0; white-space: pre-line; color: var(--text); font-size: 14px; }
+.hours {
+  margin-top: 12px; padding: 10px 12px; border-radius: 11px;
+  background: var(--brand-soft); color: var(--brand); font-size: 13px; font-weight: 600;
+}
+
+/* ─────────── Afzalliklar ─────────── */
+.adv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.adv {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 13px; box-shadow: var(--shadow);
+}
+.adv .i { font-size: 21px; }
+.adv b { display: block; font-size: 13.5px; margin: 6px 0 3px; }
+.adv span { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* ─────────── Natijalar ─────────── */
+.video-row { display: flex; gap: 10px; overflow-x: auto; padding: 2px 0 6px; scroll-snap-type: x mandatory; }
+.video-row::-webkit-scrollbar { display: none; }
+.vid {
+  flex: 0 0 200px; scroll-snap-align: start;
+  border-radius: 13px; overflow: hidden; box-shadow: var(--shadow); cursor: pointer;
+  background: var(--card); border: 1px solid var(--border);
+}
+.vid-thumb { position: relative; background: #0b1413; }
+.vid img { width: 100%; height: 116px; object-fit: cover; display: block; opacity: .92; }
+.vid-thumb { min-height: 116px; }
+.vid .play {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 32px; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6);
+}
+.vid-title {
+  padding: 9px 11px 11px; font-size: 12.5px; font-weight: 600; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* ─────────── FAQ ─────────── */
+.faq { display: flex; flex-direction: column; gap: 8px; }
+.faq details {
+  background: var(--card); border: 1px solid var(--border); border-radius: 13px;
+  padding: 12px 14px; box-shadow: var(--shadow);
+}
+.faq summary {
+  cursor: pointer; font-weight: 600; font-size: 14px; list-style: none;
+  display: flex; justify-content: space-between; gap: 10px; align-items: flex-start;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--brand); font-size: 19px; line-height: 1; flex: 0 0 auto; }
+.faq details[open] summary::after { content: "–"; }
+.faq p { margin: 9px 0 0; font-size: 13.5px; color: var(--muted); }
+
+/* ─────────── Aloqa ─────────── */
+.contact-card { padding: 4px 0; }
+.contact-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 15px;
+  color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); font-size: 14px;
+}
+.contact-row:last-child { border-bottom: none; }
+.contact-row span { font-size: 17px; width: 22px; text-align: center; }
+
+.disclaimer { padding: 20px 18px 8px; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* ─────────── Sahifa boshi ─────────── */
+.page-head {
+  padding: 22px 16px 14px;
+  background: linear-gradient(155deg, var(--brand) 0%, var(--brand-deep) 100%);
+  color: #fff;
+}
+.page-head h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.3px; }
+.page-head p { margin: 0; font-size: 13.5px; color: rgba(255,255,255,.85); }
+
+/* ─────────── Ro'yxat kartalari ─────────── */
+.list { display: flex; flex-direction: column; gap: 9px; padding: 14px; }
+.item {
+  display: flex; gap: 12px; align-items: flex-start; text-align: left;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; box-shadow: var(--shadow); cursor: pointer; width: 100%;
+  color: var(--text); font-family: inherit; transition: transform .12s;
+}
+.item:active { transform: scale(.985); }
+.item-ico {
+  flex: 0 0 40px; height: 40px; border-radius: 12px; background: var(--brand-soft);
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+}
+.item-txt b { display: block; font-size: 14.5px; font-weight: 650; margin-bottom: 2px; }
+.item-txt span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.item-arrow { margin-left: auto; align-self: center; color: var(--muted); font-size: 18px; }
+
+/* ─────────── Klinika ─────────── */
+.clinic { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.clinic img { width: 100%; height: 150px; object-fit: cover; display: block; }
+.clinic-b { padding: 14px; }
+.clinic-b b { font-size: 15.5px; }
+.clinic-b p { margin: 5px 0 0; font-size: 13px; color: var(--muted); }
+.clinic-actions { display: flex; gap: 8px; margin-top: 12px; }
+.clinic-actions a, .clinic-actions button {
+  flex: 1; text-align: center; padding: 10px; border-radius: 11px; font-size: 13px;
+  font-weight: 600; text-decoration: none; border: 1px solid var(--border);
+  background: var(--brand-soft-2); color: var(--brand); cursor: pointer; font-family: inherit;
+}
+.clinic-actions .fill { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+/* ─────────── Formalar ─────────── */
+.form { margin: 14px; display: flex; flex-direction: column; }
+.fl { font-size: 12.5px; font-weight: 600; color: var(--muted); margin: 12px 0 5px; }
+.fl:first-child { margin-top: 0; }
+input, select, textarea {
+  width: 100%; padding: 12px 13px; font-size: 15px; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-secondary); color: var(--text); outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--brand); }
+textarea { resize: vertical; }
+input.err, textarea.err { border-color: #e14545; }
+
+.btn-primary {
+  margin-top: 18px; padding: 14px; border: none; border-radius: 13px;
+  background: var(--brand); color: #fff; font-size: 15px; font-weight: 650;
+  font-family: inherit; cursor: pointer; transition: transform .12s;
+}
+.btn-primary:active { transform: scale(.98); }
+.btn-primary:disabled { opacity: .6; }
+.btn-ghost {
+  margin-top: 14px; padding: 12px 20px; border-radius: 12px; border: 1px solid var(--brand);
+  background: transparent; color: var(--brand); font-weight: 600; font-family: inherit; cursor: pointer;
+}
+.hint { font-size: 12px; color: var(--muted); text-align: center; margin: 10px 0 0; }
+
+/* ─────────── AI banner ─────────── */
+.ai-banner {
+  display: flex; gap: 12px; align-items: center; margin: 14px 14px 0; padding: 14px;
+  border-radius: var(--radius); background: var(--brand-soft); border: 1px dashed var(--brand);
+}
+.ai-icon { font-size: 26px; }
+.ai-banner b { display: block; font-size: 14px; color: var(--brand); }
+.ai-banner span { font-size: 12.5px; color: var(--muted); }
+
+/* ─────────── Muvaffaqiyat ─────────── */
+.ok-box { margin: 14px; padding: 28px 18px; text-align: center; background: var(--card);
+  border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.ok-icon { font-size: 44px; }
+.ok-box b { display: block; margin: 10px 0 6px; font-size: 17px; }
+.ok-box p { margin: 0; font-size: 13.5px; color: var(--muted); }
+
+/* ─────────── Batafsil oyna ─────────── */
+.sheet-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; }
+.sheet-back { position: absolute; inset: 0; background: rgba(0,0,0,.45); animation: fade .2s ease; }
+.sheet {
+  position: relative; width: 100%; max-height: 86vh; overflow-y: auto;
+  background: var(--card); border-radius: 22px 22px 0 0;
+  padding: 10px 18px calc(22px + var(--safe-b)); animation: up .26s cubic-bezier(.2,.8,.3,1);
+}
+.sheet-grip { width: 38px; height: 4px; border-radius: 4px; background: var(--border); margin: 4px auto 14px; }
+.sheet-body h3 { margin: 0 0 10px; font-size: 18px; letter-spacing: -.2px; }
+.sheet-body .ico { font-size: 34px; display: block; margin-bottom: 8px; }
+.sheet-body p { margin: 0; font-size: 14.5px; color: var(--text); line-height: 1.6; }
+.sheet-body .note { margin-top: 12px; font-size: 12.5px; color: var(--muted); font-style: italic; }
+@keyframes up { from { transform: translateY(100%) } to { transform: translateY(0) } }
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+/* ─────────── Tab bar ─────────── */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--card); border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-b);
+  backdrop-filter: blur(12px);
+}
+.tab {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 2px 7px; border: none; background: none; cursor: pointer;
+  font-size: 10.5px; font-family: inherit; color: var(--muted); font-weight: 600;
+}
+.tab span { font-size: 19px; filter: grayscale(1); opacity: .55; transition: .15s; }
+.tab.active { color: var(--brand); }
+.tab.active span { filter: none; opacity: 1; transform: translateY(-1px); }
+
+/* ─────────── Toast ─────────── */
+.toast {
+  position: fixed; left: 50%; bottom: calc(88px + var(--safe-b)); transform: translateX(-50%) translateY(20px);
+  background: #1d2b2a; color: #fff; padding: 11px 18px; border-radius: 12px; font-size: 13.5px;
+  opacity: 0; pointer-events: none; transition: .25s; z-index: 90; max-width: 88vw; text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
