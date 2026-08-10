@@ -31,8 +31,12 @@ def fmt_time(dt: datetime) -> str:
     return dt.strftime("%H:%M")
 
 
-async def send(text: str) -> None:
-    """Hisobot matnini barcha qabul qiluvchilarga yuboradi."""
+async def send(text: str, markup: dict | None = None, fallback: dict | None = None) -> None:
+    """Hisobot matnini barcha qabul qiluvchilarga yuboradi.
+
+    `markup` — inline tugmalar. Telegram uni rad etsa (masalan Web App tugmasi
+    qo'llab-quvvatlanmasa) `fallback` bilan qayta uriniladi.
+    """
     if not REPORT_BOT_TOKEN or not REPORT_CHAT_IDS:
         log.info("Hisobot boti sozlanmagan — yuborilmadi.")
         return
@@ -40,17 +44,46 @@ async def send(text: str) -> None:
     url = f"https://api.telegram.org/bot{REPORT_BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient(timeout=20) as client:
         for chat_id in REPORT_CHAT_IDS:
+            payload = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            }
+            if markup:
+                payload["reply_markup"] = markup
             try:
-                r = await client.post(url, json={
-                    "chat_id": chat_id,
-                    "text": text,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                })
-                if not r.json().get("ok"):
-                    log.warning("Hisobot yuborilmadi (%s): %s", chat_id, r.text[:200])
+                r = await client.post(url, json=payload)
+                if r.json().get("ok"):
+                    continue
+                log.warning("Hisobot yuborilmadi (%s): %s", chat_id, r.text[:200])
+                if fallback:
+                    payload["reply_markup"] = fallback
+                    r2 = await client.post(url, json=payload)
+                    if not r2.json().get("ok"):
+                        payload.pop("reply_markup", None)
+                        await client.post(url, json=payload)
             except Exception as e:
                 log.warning("Hisobot xatosi (%s): %s", chat_id, e)
+
+
+def _action_markups(appt_id: int) -> tuple[dict, dict]:
+    """Tasdiqlash/bekor tugmalari: Web App varianti va oddiy havola varianti."""
+    from app.admin import make_token
+    from app.config import BASE_URL
+
+    ok_url = f"{BASE_URL}/admin/appt?id={appt_id}&action=confirm&token={make_token(appt_id, 'confirm')}"
+    no_url = f"{BASE_URL}/admin/appt?id={appt_id}&action=cancel&token={make_token(appt_id, 'cancel')}"
+
+    web_app = {"inline_keyboard": [[
+        {"text": "✅ Tasdiqlash", "web_app": {"url": ok_url}},
+        {"text": "❌ Bekor qilish", "web_app": {"url": no_url}},
+    ]]}
+    plain = {"inline_keyboard": [[
+        {"text": "✅ Tasdiqlash", "url": ok_url},
+        {"text": "❌ Bekor qilish", "url": no_url},
+    ]]}
+    return web_app, plain
 
 
 # ─────────────────────────── Yangi ariza ───────────────────────────
@@ -63,7 +96,7 @@ async def new_appointment(appt: Appointment, clinic: str, service: str, username
         f"📱 <b>Telefon:</b> <code>{escape(appt.phone)}</code>\n"
         f"🏥 <b>Klinika:</b> {escape(clinic)}\n"
         f"🩺 <b>Masala:</b> {escape(service)}\n"
-        f"🕐 <b>Qulay vaqt:</b> {escape(appt.preferred_time or 'ko‘rsatilmagan')}\n"
+        f"🕐 <b>Qabul vaqti:</b> {escape(appt.preferred_time or 'ko‘rsatilmagan')}\n"
     )
     if appt.comment:
         text += f"💬 <b>Izoh:</b> {escape(appt.comment)}\n"
@@ -71,10 +104,11 @@ async def new_appointment(appt: Appointment, clinic: str, service: str, username
         f"\n━━━━━━━━━━━━━━━━━━━━\n"
         f"📲 Manba: {'Mini App' if appt.source == 'webapp' else 'Bot menyusi'}\n"
         f"🔗 Telegram: {escape(username or '—')}\n"
-        f"🗓 {fmt_date(created)}, {fmt_time(created)}\n\n"
-        f"☎️ Bemor bilan bog‘lanish esdan chiqmasin."
+        f"🗓 Yuborildi: {fmt_date(created)}, {fmt_time(created)}\n\n"
+        f"👇 Arizani tasdiqlang yoki bekor qiling — bemorga xabar avtomatik boradi."
     )
-    await send(text)
+    web_app, plain = _action_markups(appt.id)
+    await send(text, markup=web_app, fallback=plain)
 
 
 # ─────────────────────────── Yangi murojaat ───────────────────────────

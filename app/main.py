@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.admin import router as admin_router
 from app.api import router as api_router
 from app.bot.instance import bot, dp
 from app.config import BASE_URL, WEBAPP_DIR, WEBAPP_URL, WEBHOOK_PATH
@@ -56,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router)
+app.include_router(admin_router)
 
 
 @app.post(WEBHOOK_PATH)

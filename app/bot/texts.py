@@ -75,6 +75,21 @@ def contact_text(doctor) -> str:
     )
 
 
+PICK_DATE = (
+    "5/5 — 📅 <b>Qabul kunini tanlang</b>\n\n"
+    "Onlayn yozilish <b>ertangi kundan</b> boshlab ochiq.\n"
+    "Shanba va yakshanba — dam olish kunlari (kalendarda «·» bilan belgilangan)."
+)
+
+
+def pick_time(day_text: str) -> str:
+    return (
+        f"📅 <b>{escape(day_text)}</b>\n\n"
+        f"🕐 Endi qulay soatni tanlang.\n"
+        f"<i>Ish vaqti 09:00 – 19:00, 12:00 – 13:00 tushlik.</i>"
+    )
+
+
 def appointment_summary(name: str, phone: str, clinic: str, service: str, when: str) -> str:
     return (
         f"📝 <b>Arizangizni tasdiqlang:</b>\n\n"
@@ -82,7 +97,41 @@ def appointment_summary(name: str, phone: str, clinic: str, service: str, when: 
         f"📱 Telefon: {escape(phone)}\n"
         f"🏥 Klinika: {escape(clinic)}\n"
         f"🩺 Xizmat: {escape(service)}\n"
-        f"🕐 Qulay vaqt: {escape(when)}"
+        f"🕐 Qabul vaqti: {escape(when)}"
+    )
+
+
+def appointment_accepted(appt_id: int, when: str) -> str:
+    return (
+        f"✅ <b>Arizangiz qabul qilindi!</b>\n\n"
+        f"🔢 <b>Murojaat raqami: №{appt_id}</b>\n"
+        f"🕐 Tanlangan vaqt: {escape(when or 'kelishilgan holda')}\n\n"
+        f"⏳ <b>Iltimos, javobni kuting.</b>\n"
+        f"Shifokor arizangizni ko'rib chiqib tasdiqlaydi — natija shu yerga xabar "
+        f"bo'lib keladi.\n\n"
+        f"Shoshilinch holatlarda: 📞 +998 90 008 38 78"
+    )
+
+
+def appointment_confirmed(appt_id: int, when: str, clinic: str) -> str:
+    return (
+        f"✅ <b>Murojaatingiz qabul qilindi!</b>\n\n"
+        f"🔢 Murojaat raqami: <b>№{appt_id}</b>\n"
+        f"🕐 Qabul vaqti: <b>{escape(when or 'kelishilgan holda')}</b>\n"
+        f"🏥 Manzil: {escape(clinic)}\n\n"
+        f"🙏 <b>Qabulga kechikmay keling.</b>\n"
+        f"Iltimos, belgilangan vaqtdan 10 daqiqa oldin yetib boring."
+    )
+
+
+def appointment_rejected(appt_id: int, when: str) -> str:
+    return (
+        f"❌ <b>Afsuski, bu vaqt band ekan</b>\n\n"
+        f"🔢 Murojaat raqami: №{appt_id}\n"
+        f"🕐 So'ralgan vaqt: {escape(when or '—')}\n\n"
+        f"Iltimos, <b>boshqa kun va vaqtni tanlab qayta ariza qoldiring</b> — "
+        f"«📅 Qabulga yozilish» tugmasini bosing.\n\n"
+        f"Savollar bo'lsa: 📞 +998 90 008 38 78"
     )
 
 

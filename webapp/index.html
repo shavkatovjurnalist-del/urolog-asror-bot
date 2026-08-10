@@ -174,8 +174,13 @@
         <label class="fl">Qaysi masala bo'yicha?</label>
         <select id="b-service"></select>
 
-        <label class="fl">Sizga qulay vaqt</label>
-        <input id="b-time" type="text" placeholder="Masalan: ertaga tushdan keyin" />
+        <label class="fl">Qabul kuni *</label>
+        <input id="b-date" type="date" />
+        <p class="fh" id="b-date-hint">Ertangi kundan boshlab. Shanba va yakshanba — dam olish.</p>
+
+        <label class="fl">Qabul soati *</label>
+        <div class="slots" id="b-slots"></div>
+        <p class="fh">Ish vaqti 09:00 – 19:00 · 12:00 – 13:00 tushlik.</p>
 
         <label class="fl">Qo'shimcha izoh</label>
         <textarea id="b-comment" rows="3" placeholder="Ixtiyoriy"></textarea>
@@ -187,7 +192,9 @@
       <div class="ok-box" id="book-ok" hidden>
         <div class="ok-icon">✅</div>
         <b>Arizangiz qabul qilindi</b>
+        <div class="ok-num">Murojaat raqami: <span id="book-ok-num"></span></div>
         <p id="book-ok-text"></p>
+        <div class="ok-wait">⏳ Javobni kuting</div>
         <button class="btn-ghost" id="book-close">Bosh sahifaga</button>
       </div>
     </section>

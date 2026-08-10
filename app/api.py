@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import repo, report
 from app.ai import answer as ai_answer
+from app.bot import calendar as cal
 from app.bot import texts as t
 from app.config import ASK_ENABLED
 from app.db import get_session
@@ -36,6 +37,13 @@ async def content(s: AsyncSession = Depends(get_session)) -> dict:
 
     return {
         "flags": {"ask_enabled": ASK_ENABLED},
+        "schedule": {
+            "slots": cal.TIME_SLOTS,
+            "min_date": cal.min_date().isoformat(),
+            "max_date": cal.max_date().isoformat(),
+            "closed_weekdays": sorted(cal.WEEKEND),  # 5=shanba, 6=yakshanba
+            "lunch": "12:00 – 13:00",
+        },
         "doctor": {
             "full_name": doctor.full_name,
             "short_name": doctor.short_name,
@@ -90,6 +98,7 @@ class AppointmentIn(BaseModel):
     phone: str
     clinic_id: int | None = None
     service_id: int | None = None
+    scheduled_at: str = ""
     preferred_time: str = ""
     comment: str = ""
 
@@ -124,6 +133,22 @@ async def create_appointment(
     if len(digits) < 9:
         raise HTTPException(400, "Telefon raqami noto'g'ri")
 
+    # Sana va vaqt: ertangi kundan boshlab, dam olish kunlarisiz, ish soatlarida
+    scheduled = None
+    if payload.scheduled_at:
+        try:
+            scheduled = datetime.fromisoformat(payload.scheduled_at)
+        except ValueError:
+            raise HTTPException(400, "Sana formati noto'g'ri") from None
+        if scheduled.date() < cal.min_date():
+            raise HTTPException(400, "Faqat ertangi kundan boshlab yozilish mumkin")
+        if scheduled.date() > cal.max_date():
+            raise HTTPException(400, "Sana juda uzoq")
+        if scheduled.weekday() in cal.WEEKEND:
+            raise HTTPException(400, "Shanba va yakshanba qabul yo'q")
+        if scheduled.strftime("%H:%M") not in cal.TIME_SLOTS:
+            raise HTTPException(400, "Bu soatda qabul yo'q")
+
     tg_user = _tg_user(payload.init_data)
     user = await repo.upsert_user(s, tg_user, source="webapp") if tg_user else None
 
@@ -135,6 +160,7 @@ async def create_appointment(
         phone=payload.phone.strip(),
         clinic_id=payload.clinic_id or None,
         service_id=payload.service_id or None,
+        scheduled_at=scheduled,
         preferred_time=payload.preferred_time.strip(),
         comment=payload.comment.strip(),
         source="webapp",
@@ -156,9 +182,7 @@ async def create_appointment(
     if tg_user:
         try:
             await bot.send_message(
-                tg_user.id,
-                f"✅ <b>Arizangiz qabul qilindi!</b> (№{appt.id})\n\n"
-                "Shifokor yordamchisi tez orada siz bilan bog'lanadi.",
+                tg_user.id, t.appointment_accepted(appt.id, appt.preferred_time)
             )
         except Exception as e:
             log.warning("Bemorga xabar yuborilmadi: %s", e)

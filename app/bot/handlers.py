@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
+from datetime import time as dtime
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
@@ -18,6 +19,7 @@ from aiogram.types import (
 
 from app import repo, report
 from app.ai import answer as ai_answer
+from app.bot import calendar as cal
 from app.bot import keyboards as kb
 from app.bot import texts as t
 from app.config import ADMIN_IDS, ASK_ENABLED, BASE_DIR
@@ -36,7 +38,8 @@ class Booking(StatesGroup):
     phone = State()
     clinic = State()
     service = State()
-    when = State()
+    day = State()
+    time = State()
     confirm = State()
 
 
@@ -236,7 +239,7 @@ async def book_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(Booking.name)
     await message.answer(
-        "📅 <b>Qabulga yozilish</b>\n\n1/4 — Ism-familiyangizni yozing:",
+        "📅 <b>Qabulga yozilish</b>\n\n1/5 — Ism-familiyangizni yozing:",
         reply_markup=kb.cancel_kb(),
     )
 
@@ -246,7 +249,7 @@ async def book_start_cb(cq: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await state.set_state(Booking.name)
     await cq.message.answer(
-        "📅 <b>Qabulga yozilish</b>\n\n1/4 — Ism-familiyangizni yozing:",
+        "📅 <b>Qabulga yozilish</b>\n\n1/5 — Ism-familiyangizni yozing:",
         reply_markup=kb.cancel_kb(),
     )
     await cq.answer()
@@ -259,7 +262,7 @@ async def book_start_with_clinic(cq: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(clinic_id=clinic_id)
     await state.set_state(Booking.name)
     await cq.message.answer(
-        "📅 <b>Qabulga yozilish</b>\n\n1/4 — Ism-familiyangizni yozing:",
+        "📅 <b>Qabulga yozilish</b>\n\n1/5 — Ism-familiyangizni yozing:",
         reply_markup=kb.cancel_kb(),
     )
     await cq.answer()
@@ -274,7 +277,7 @@ async def book_name(message: Message, state: FSMContext) -> None:
     await state.update_data(full_name=name)
     await state.set_state(Booking.phone)
     await message.answer(
-        "2/4 — Telefon raqamingizni yuboring yoki yozing (masalan +998901234567):",
+        "2/5 — Telefon raqamingizni yuboring yoki yozing (masalan +998901234567):",
         reply_markup=kb.phone_kb(),
     )
 
@@ -306,7 +309,7 @@ async def _book_after_phone(message: Message, state: FSMContext, phone: str) -> 
     rows.append([InlineKeyboardButton(text="🤷 Farqi yo'q", callback_data="bkc:0")])
     await state.set_state(Booking.clinic)
     await message.answer(
-        "3/4 — Qaysi klinikada qabul qilinishni xohlaysiz?",
+        "3/5 — Qaysi klinikada qabul qilinishni xohlaysiz?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
 
@@ -322,12 +325,14 @@ async def book_clinic(cq: CallbackQuery, state: FSMContext) -> None:
 async def _ask_service(message: Message, state: FSMContext) -> None:
     async with session_scope() as s:
         services = await repo.get_services(s)
-    rows = [[InlineKeyboardButton(text=f"{sv.icon} {sv.title}", callback_data=f"bks:{sv.id}")]
-            for sv in services]
-    rows.append([InlineKeyboardButton(text="❔ Bilmayman / maslahat kerak", callback_data="bks:0")])
+    # «Konsultatsiya» — ro'yxatning eng tepasida
+    rows = [[InlineKeyboardButton(text="💬 Konsultatsiya (umumiy maslahat)",
+                                  callback_data="bks:0")]]
+    rows += [[InlineKeyboardButton(text=f"{sv.icon} {sv.title}", callback_data=f"bks:{sv.id}")]
+             for sv in services]
     await state.set_state(Booking.service)
     await message.answer(
-        "4/4 — Qaysi masala bo'yicha murojaat qilyapsiz?",
+        "4/5 — Qaysi masala bo'yicha murojaat qilyapsiz?",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
 
@@ -336,47 +341,89 @@ async def _ask_service(message: Message, state: FSMContext) -> None:
 async def book_service(cq: CallbackQuery, state: FSMContext) -> None:
     sid = int(cq.data.split(":")[1])
     await state.update_data(service_id=sid or None)
-    await state.set_state(Booking.when)
+    await state.set_state(Booking.day)
     await cq.answer()
-    await cq.message.answer(
-        "🕐 Sizga qulay kun va vaqtni yozing (masalan: «ertaga tushdan keyin»).\n"
-        "Yoki «⏭ O'tkazib yuborish» tugmasini bosing.",
-        reply_markup=kb.skip_kb("bkw:skip"),
+    await cq.message.answer(t.PICK_DATE, reply_markup=cal.start_calendar_kb())
+
+
+# ─── 5/5: sana ───
+@router.callback_query(F.data == "cal:skip")
+async def cal_skip(cq: CallbackQuery) -> None:
+    await cq.answer()
+
+
+@router.callback_query(F.data == "cal:cancel")
+async def cal_cancel(cq: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await cq.message.edit_text("Ariza bekor qilindi.")
+    await cq.message.answer("Asosiy menyu:", reply_markup=kb.main_menu())
+    await cq.answer()
+
+
+@router.callback_query(Booking.day, F.data.startswith("cal:nav:"))
+async def cal_nav(cq: CallbackQuery) -> None:
+    year, month = (int(x) for x in cq.data.split(":")[2].split("-"))
+    await cq.message.edit_reply_markup(reply_markup=cal.calendar_kb(year, month))
+    await cq.answer()
+
+
+@router.callback_query(Booking.day, F.data.startswith("cal:day:"))
+async def cal_day(cq: CallbackQuery, state: FSMContext) -> None:
+    picked = date.fromisoformat(cq.data.split(":")[2])
+    if not cal.is_selectable(picked):
+        await cq.answer("Bu kunni tanlab bo'lmaydi", show_alert=True)
+        return
+    await state.update_data(day=picked.isoformat())
+    await state.set_state(Booking.time)
+    await cq.message.edit_text(t.pick_time(cal.fmt_date(picked)), reply_markup=cal.time_kb(picked))
+    await cq.answer()
+
+
+# ─── 5/5: vaqt ───
+@router.callback_query(Booking.time, F.data == "tm:back")
+async def time_back(cq: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    picked = date.fromisoformat(data["day"])
+    await state.set_state(Booking.day)
+    await cq.message.edit_text(t.PICK_DATE, reply_markup=cal.calendar_kb(picked.year, picked.month))
+    await cq.answer()
+
+
+@router.callback_query(Booking.time, F.data.startswith("tm:set:"))
+async def time_set(cq: CallbackQuery, state: FSMContext) -> None:
+    slot = cq.data.split(":", 2)[2]
+    data = await state.get_data()
+    picked = date.fromisoformat(data["day"])
+    hour, minute = (int(x) for x in slot.split(":"))
+    await state.update_data(
+        scheduled_at=datetime.combine(picked, dtime(hour, minute)).isoformat(),
+        preferred_time=f"{cal.fmt_date(picked)}, soat {slot}",
     )
-
-
-@router.callback_query(Booking.when, F.data == "bkw:skip")
-async def book_when_skip(cq: CallbackQuery, state: FSMContext) -> None:
-    await state.update_data(preferred_time="Farqi yo'q")
     await cq.answer()
-    await _confirm(cq.message, state)
+    await _confirm(cq.message, state, edit=True)
 
 
-@router.message(Booking.when, F.text)
-async def book_when(message: Message, state: FSMContext) -> None:
-    await state.update_data(preferred_time=message.text.strip())
-    await _confirm(message, state)
-
-
-async def _confirm(message: Message, state: FSMContext) -> None:
+async def _confirm(message: Message, state: FSMContext, edit: bool = False) -> None:
     data = await state.get_data()
     async with session_scope() as s:
         clinic = await repo.get_clinic(s, data["clinic_id"]) if data.get("clinic_id") else None
         service = await repo.get_service(s, data["service_id"]) if data.get("service_id") else None
     await state.set_state(Booking.confirm)
-    await message.answer(
-        t.appointment_summary(
-            data["full_name"],
-            data["phone"],
-            clinic.name if clinic else "Farqi yo'q",
-            service.title if service else "Umumiy maslahat",
-            data.get("preferred_time", "—"),
-        ),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="bk:ok"),
-            InlineKeyboardButton(text="❌ Bekor", callback_data="bk:no"),
-        ]]),
+    text = t.appointment_summary(
+        data["full_name"],
+        data["phone"],
+        clinic.name if clinic else "Farqi yo'q",
+        service.title if service else "Konsultatsiya (umumiy maslahat)",
+        data.get("preferred_time", "—"),
     )
+    markup = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Tasdiqlash", callback_data="bk:ok"),
+        InlineKeyboardButton(text="❌ Bekor", callback_data="bk:no"),
+    ]])
+    if edit:
+        await message.edit_text(text, reply_markup=markup)
+    else:
+        await message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(Booking.confirm, F.data == "bk:no")
@@ -403,21 +450,20 @@ async def book_save(cq: CallbackQuery, state: FSMContext) -> None:
             phone=data["phone"],
             clinic_id=data.get("clinic_id"),
             service_id=data.get("service_id"),
+            scheduled_at=(
+                datetime.fromisoformat(data["scheduled_at"]) if data.get("scheduled_at") else None
+            ),
             preferred_time=data.get("preferred_time", ""),
             source="bot",
         )
         clinic = await repo.get_clinic(s, appt.clinic_id) if appt.clinic_id else None
         service = await repo.get_service(s, appt.service_id) if appt.service_id else None
         clinic_name = clinic.name if clinic else "Farqi yo'q"
-        service_name = service.title if service else "Umumiy maslahat"
+        service_name = service.title if service else "Konsultatsiya (umumiy maslahat)"
         admin_text = t.admin_appointment(appt, clinic_name, service_name, _uname(cq.from_user))
 
     await state.clear()
-    await cq.message.edit_text(
-        f"✅ <b>Arizangiz qabul qilindi!</b> (№{appt.id})\n\n"
-        "Shifokor yordamchisi tez orada siz bilan bog'lanadi.\n"
-        "Shoshilinch holatlarda: 📞 +998 90 008 38 78"
-    )
+    await cq.message.edit_text(t.appointment_accepted(appt.id, appt.preferred_time))
     await cq.message.answer("Asosiy menyu:", reply_markup=kb.main_menu())
     await cq.answer("Qabul qilindi ✅")
     await notify_admins(cq.bot, admin_text, kb.admin_appointment_kb(appt.id))
@@ -534,6 +580,19 @@ async def stats(message: Message) -> None:
 @router.message(Command("id"))
 async def whoami(message: Message) -> None:
     await message.answer(f"Sizning Telegram ID: <code>{message.from_user.id}</code>")
+
+
+# ─────────────────────────── Eskirgan tugmalar ───────────────────────────
+@router.callback_query(F.data.startswith(("cal:", "tm:", "bk:", "bks:", "bkc:")))
+async def stale_callback(cq: CallbackQuery, state: FSMContext) -> None:
+    """Servis qayta ishga tushsa FSM holati yo'qoladi — foydalanuvchini chalkashtirmaymiz."""
+    await state.clear()
+    await cq.answer("Ariza jarayoni eskirgan", show_alert=False)
+    await cq.message.answer(
+        "⚠️ Ariza jarayoni uzilib qoldi.\n\n"
+        "Iltimos, «📅 Qabulga yozilish» tugmasini bosib qaytadan boshlang.",
+        reply_markup=kb.main_menu(),
+    )
 
 
 # ─────────────────────────── Boshqa har qanday matn ───────────────────────────

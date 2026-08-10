@@ -103,7 +103,9 @@
     $('#doc-exp').textContent = '🕐 Tajriba ' + doc.experience;
     $('#doc-bio').textContent = doc.bio;
     $('#doc-hours').textContent = '🗓 Qabul kunlari: ' + doc.work_hours;
-    $('#book-hours').textContent = 'Qabul kunlari: ' + doc.work_hours;
+    // Onlayn yozilish jadvali shifokorning umumiy ish vaqtidan farq qilishi mumkin
+    $('#book-hours').textContent =
+      'Onlayn yozilish: Dushanba–Juma, 09:00 – 19:00 · 12:00 – 13:00 tushlik.';
 
     // Aloqa
     $('#doc-phone').textContent = doc.phone;
@@ -204,9 +206,97 @@
     $('#b-clinic').innerHTML =
       '<option value="">Farqi yo\'q</option>' +
       d.clinics.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    // «Konsultatsiya» — ro'yxatning eng tepasida
     $('#b-service').innerHTML =
-      '<option value="">Umumiy maslahat</option>' +
+      '<option value="">💬 Konsultatsiya (umumiy maslahat)</option>' +
       d.services.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('');
+
+    initSchedule();
+  }
+
+  // ─────────── Sana va soat (qoidalar serverdan keladi) ───────────
+  let SLOTS = ['09:00', '10:00', '11:00', '13:00', '14:00',
+               '15:00', '16:00', '17:00', '18:00'];
+  let CLOSED_DAYS = [5, 6];   // 5 = shanba, 6 = yakshanba (Mon=0)
+  const MONTHS_UZ = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
+                     'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+  const WEEK_UZ = ['Yakshanba', 'Dushanba', 'Seshanba', 'Chorshanba',
+                   'Payshanba', 'Juma', 'Shanba'];
+  let pickedSlot = '';
+
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // JS: Yakshanba=0 … Shanba=6.  Server: Dushanba=0 … Yakshanba=6.
+  const isClosed = (d) => CLOSED_DAYS.includes((d.getDay() + 6) % 7);
+
+  function nextWorkday(from) {
+    const d = new Date(from);
+    while (isClosed(d)) d.setDate(d.getDate() + 1);
+    return d;
+  }
+
+  function initSchedule() {
+    const sc = DATA?.schedule;
+    if (sc) {
+      SLOTS = sc.slots || SLOTS;
+      CLOSED_DAYS = sc.closed_weekdays || CLOSED_DAYS;
+    }
+
+    const input = $('#b-date');
+    const minD = sc?.min_date ? new Date(sc.min_date + 'T00:00:00') : (() => {
+      const d = new Date(); d.setDate(d.getDate() + 1); return d;
+    })();
+    const maxD = sc?.max_date ? new Date(sc.max_date + 'T00:00:00') : (() => {
+      const d = new Date(); d.setDate(d.getDate() + 60); return d;
+    })();
+
+    input.min = iso(minD);
+    input.max = iso(maxD);
+    input.value = iso(nextWorkday(minD));
+    input.dataset.min = iso(minD);
+
+    $('#b-slots').innerHTML = SLOTS
+      .map((s) => `<button type="button" class="slot" data-slot="${s}">${s}</button>`)
+      .join('');
+    $$('.slot').forEach((b) =>
+      b.addEventListener('click', () => {
+        haptic();
+        pickedSlot = b.dataset.slot;
+        $$('.slot').forEach((x) => x.classList.toggle('on', x === b));
+        $('#b-slots').classList.remove('err');
+      }));
+
+    input.addEventListener('change', checkDate);
+    checkDate();
+  }
+
+  function checkDate() {
+    const input = $('#b-date');
+    const hint = $('#b-date-hint');
+    if (!input.value) return false;
+    const d = new Date(input.value + 'T00:00:00');
+    const minD = new Date((input.dataset.min || input.min) + 'T00:00:00');
+
+    if (isClosed(d)) {
+      hint.textContent = '⚠️ Shanba va yakshanba qabul yo\'q — ish kunini tanlang.';
+      hint.classList.add('warn');
+      input.classList.add('err');
+      return false;
+    }
+    if (d < minD) {
+      hint.textContent = '⚠️ Faqat ertangi kundan boshlab yozilish mumkin.';
+      hint.classList.add('warn');
+      input.classList.add('err');
+      return false;
+    }
+    hint.textContent = `${d.getDate()}-${MONTHS_UZ[d.getMonth()]}, ${WEEK_UZ[d.getDay()]}`;
+    hint.classList.remove('warn');
+    input.classList.remove('err');
+    return true;
+  }
+
+  function scheduleText() {
+    const d = new Date($('#b-date').value + 'T00:00:00');
+    return `${d.getDate()}-${MONTHS_UZ[d.getMonth()]}, ${WEEK_UZ[d.getDay()]}, soat ${pickedSlot}`;
   }
 
   // ─────────── API ───────────
@@ -256,6 +346,17 @@
         toast('Ism va telefon raqamini to\'g\'ri kiriting');
         return;
       }
+      if (!checkDate()) {
+        notify('error');
+        toast('Qabul kunini to\'g\'ri tanlang');
+        return;
+      }
+      if (!pickedSlot) {
+        $('#b-slots').classList.add('err');
+        notify('error');
+        toast('Qabul soatini tanlang');
+        return;
+      }
       const btn = e.target.querySelector('button[type=submit]');
       btn.disabled = true;
       btn.textContent = 'Yuborilmoqda…';
@@ -265,14 +366,17 @@
           phone: phone.value.trim(),
           clinic_id: Number($('#b-clinic').value) || null,
           service_id: Number($('#b-service').value) || null,
-          preferred_time: $('#b-time').value.trim(),
+          scheduled_at: `${$('#b-date').value}T${pickedSlot}:00`,
+          preferred_time: scheduleText(),
           comment: $('#b-comment').value.trim(),
         });
         notify('success');
         $('#book-form').hidden = true;
         $('#book-ok').hidden = false;
+        $('#book-ok-num').textContent = `№${r.id}`;
         $('#book-ok-text').textContent =
-          `Ariza raqami №${r.id}. Shifokor yordamchisi tez orada siz bilan bog'lanadi.`;
+          `Tanlangan vaqt: ${scheduleText()}. Iltimos, javobni kuting — shifokor ` +
+          `arizani ko'rib chiqib tasdiqlaydi, natija botga xabar bo'lib keladi.`;
       } catch (err) {
         notify('error');
         toast(err.message);

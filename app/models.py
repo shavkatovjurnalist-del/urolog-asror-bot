@@ -154,7 +154,9 @@ class Appointment(Base):
     phone: Mapped[str] = mapped_column(String(40))
     clinic_id: Mapped[int | None] = mapped_column(ForeignKey("clinics.id"), nullable=True)
     service_id: Mapped[int | None] = mapped_column(ForeignKey("services.id"), nullable=True)
-    preferred_time: Mapped[str] = mapped_column(String(120), default="")
+    # Kalendardan tanlangan aniq sana va vaqt
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    preferred_time: Mapped[str] = mapped_column(String(120), default="")  # o'qishga qulay ko'rinish
     comment: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="new")  # new|confirmed|done|cancelled
     source: Mapped[str] = mapped_column(String(20), default="bot")  # bot | webapp
