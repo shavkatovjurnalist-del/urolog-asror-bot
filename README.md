@@ -10,11 +10,16 @@ Sayt: [urologasrorturayev.uz](https://urologasrorturayev.uz)
 
 | | |
 |---|---|
-| Servis | <https://urolog-asror-bot.onrender.com> |
-| Mini App | <https://urolog-asror-bot.onrender.com/app/> |
+| Servis | <https://urolog-asror.onrender.com> (`srv-d9soq96gekts7393biu0`) |
+| Mini App | <https://urolog-asror.onrender.com/app/> |
+| Render workspace | «Urolog Asror to'rayev» — `tea-d9sopj0n74is7394mf90` (o'z 750 soati) |
 | Repo | <https://github.com/shavkatovjurnalist-del/urolog-asror-bot> |
 | Baza | Neon — `urolog` project (Frankfurt) |
+| Keep-alive | cron-job.org job `8243765` — har 10 daqiqada `/health` |
 | Hisobot boti | [@ai_humoyunbot](https://t.me/ai_humoyunbot) — arizalar va kunlik xulosa |
+
+> Eski servis `srv-d9so6rn40ujc73djrk60` («Miyonqol's workspace») **to'xtatilgan** —
+> u yerdagi bepul soatlar `ai-operator` uchun qoldi.
 
 ## Nima qiladi
 
@@ -113,7 +118,7 @@ push qilingandan keyin deploy'ni qo'lda ishga tushirish kerak:
 git push
 curl -s -X POST -H "Authorization: Bearer <RENDER_API_KEY>" \
   -H "Content-Type: application/json" \
-  https://api.render.com/v1/services/srv-d9so6rn40ujc73djrk60/deploys \
+  https://api.render.com/v1/services/srv-d9soq96gekts7393biu0/deploys \
   -d '{"clearCache":"do_not_clear"}'
 ```
 
