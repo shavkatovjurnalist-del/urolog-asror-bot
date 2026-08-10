@@ -193,3 +193,29 @@ async def daily_summary(days: int = 1) -> str:
     for chunk in [text[i:i + 3900] for i in range(0, len(text), 3900)]:
         await send(chunk)
     return text
+
+
+# ─────────────────────────── Kunlik jadval ───────────────────────────
+DAILY_HOUR_LOCAL = 20  # Toshkent vaqti bilan 20:00
+
+
+async def daily_scheduler() -> None:
+    """Har kuni belgilangan soatda xulosani yuboradi.
+
+    Servis uyquda bo'lsa o'sha kun o'tkazib yuboriladi — shuning uchun
+    `/health` ni tashqi cron bilan uyg'oq tutish tavsiya etiladi.
+    """
+    import asyncio
+
+    from app.bot.calendar import TZ_OFFSET
+
+    while True:
+        now = datetime.utcnow() + TZ_OFFSET
+        target = now.replace(hour=DAILY_HOUR_LOCAL, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+        try:
+            await daily_summary()
+        except Exception as e:
+            log.warning("Kunlik xulosa yuborilmadi: %s", e)

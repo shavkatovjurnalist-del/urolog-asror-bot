@@ -6,6 +6,16 @@ Mini App (saytning Telegram versiyasi).
 Bot: [@urolog_astorturayevbot](https://t.me/urolog_astorturayevbot) ·
 Sayt: [urologasrorturayev.uz](https://urologasrorturayev.uz)
 
+**Jonli manzillar**
+
+| | |
+|---|---|
+| Servis | <https://urolog-asror-bot.onrender.com> |
+| Mini App | <https://urolog-asror-bot.onrender.com/app/> |
+| Repo | <https://github.com/shavkatovjurnalist-del/urolog-asror-bot> |
+| Baza | Neon — `urolog` project (Frankfurt) |
+| Hisobot boti | [@ai_humoyunbot](https://t.me/ai_humoyunbot) — arizalar va kunlik xulosa |
+
 ## Nima qiladi
 
 | Bo'lim | Botda | Mini App'da |
