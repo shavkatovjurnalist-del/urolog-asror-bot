@@ -87,6 +87,14 @@
   function render(d) {
     const doc = d.doctor;
 
+    // «Murojaat» bo'limi AI ulangunga qadar yopiq
+    const askOn = d.flags?.ask_enabled;
+    $('#ask-form').hidden = !askOn;
+    $('#ask-soon').hidden = !!askOn;
+    if (!askOn) {
+      $('#ask-sub').textContent = 'AI-konsultant tayyorlanmoqda — tez orada ishga tushadi.';
+    }
+
     // Hero
     $('#doc-photo').src = doc.photo || 'assets/asror.webp';
     $('#doc-name').textContent = doc.short_name;

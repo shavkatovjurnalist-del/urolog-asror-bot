@@ -9,7 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import DATABASE_URL
 from app.models import Base
 
-engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+# Neon (Postgres) TLS talab qiladi — asyncpg uchun ssl'ni aniq beramiz.
+_connect_args = {"ssl": True} if DATABASE_URL.startswith("postgresql+asyncpg") else {}
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_recycle=280,  # Neon bo'sh ulanishlarni uzadi
+    connect_args=_connect_args,
+)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 

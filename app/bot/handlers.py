@@ -16,11 +16,11 @@ from aiogram.types import (
     Message,
 )
 
-from app import repo
+from app import repo, report
 from app.ai import answer as ai_answer
 from app.bot import keyboards as kb
 from app.bot import texts as t
-from app.config import ADMIN_IDS, BASE_DIR
+from app.config import ADMIN_IDS, ASK_ENABLED, BASE_DIR
 from app.db import session_scope
 from app.models import Consultation
 
@@ -408,12 +408,9 @@ async def book_save(cq: CallbackQuery, state: FSMContext) -> None:
         )
         clinic = await repo.get_clinic(s, appt.clinic_id) if appt.clinic_id else None
         service = await repo.get_service(s, appt.service_id) if appt.service_id else None
-        admin_text = t.admin_appointment(
-            appt,
-            clinic.name if clinic else "Farqi yo'q",
-            service.title if service else "Umumiy maslahat",
-            _uname(cq.from_user),
-        )
+        clinic_name = clinic.name if clinic else "Farqi yo'q"
+        service_name = service.title if service else "Umumiy maslahat"
+        admin_text = t.admin_appointment(appt, clinic_name, service_name, _uname(cq.from_user))
 
     await state.clear()
     await cq.message.edit_text(
@@ -424,11 +421,15 @@ async def book_save(cq: CallbackQuery, state: FSMContext) -> None:
     await cq.message.answer("Asosiy menyu:", reply_markup=kb.main_menu())
     await cq.answer("Qabul qilindi ✅")
     await notify_admins(cq.bot, admin_text, kb.admin_appointment_kb(appt.id))
+    await report.new_appointment(appt, clinic_name, service_name, _uname(cq.from_user))
 
 
 # ─────────────────────────── Murojaat / Savol (AI joyi) ───────────────────────────
 @router.message(F.text == kb.BTN_ASK)
 async def ask_start(message: Message, state: FSMContext) -> None:
+    if not ASK_ENABLED:
+        await message.answer(t.ASK_DISABLED, reply_markup=kb.main_menu())
+        return
     await state.set_state(Ask.message)
     await message.answer(
         "💬 <b>Murojaat / Savol</b>\n\n"
@@ -469,6 +470,9 @@ async def ask_save(message: Message, state: FSMContext) -> None:
         await message.answer(t.ASK_PLACEHOLDER, reply_markup=kb.main_menu())
 
     await notify_admins(message.bot, admin_text)
+    async with session_scope() as s:
+        obj = await s.get(Consultation, c.id)
+        await report.new_consultation(obj, _uname(message.from_user))
 
 
 # ─────────────────────────── Admin ───────────────────────────

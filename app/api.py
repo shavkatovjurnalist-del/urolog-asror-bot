@@ -12,9 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import repo
+from app import repo, report
 from app.ai import answer as ai_answer
 from app.bot import texts as t
+from app.config import ASK_ENABLED
 from app.db import get_session
 from app.webapp_auth import InitDataError, TgUser, parse_init_data
 
@@ -34,6 +35,7 @@ async def content(s: AsyncSession = Depends(get_session)) -> dict:
     faq = await repo.get_faq(s)
 
     return {
+        "flags": {"ask_enabled": ASK_ENABLED},
         "doctor": {
             "full_name": doctor.full_name,
             "short_name": doctor.short_name,
@@ -141,18 +143,16 @@ async def create_appointment(
     clinic = await repo.get_clinic(s, appt.clinic_id) if appt.clinic_id else None
     service = await repo.get_service(s, appt.service_id) if appt.service_id else None
 
+    clinic_name = clinic.name if clinic else "Farqi yo'q"
+    service_name = service.title if service else "Umumiy maslahat"
+    username = f"@{tg_user.username}" if tg_user and tg_user.username else "Mini App"
+
     from app.bot.handlers import notify_admins
     from app.bot.instance import bot
 
-    await notify_admins(
-        bot,
-        t.admin_appointment(
-            appt,
-            clinic.name if clinic else "Farqi yo'q",
-            service.title if service else "Umumiy maslahat",
-            f"@{tg_user.username}" if tg_user and tg_user.username else "Mini App",
-        ),
-    )
+    await notify_admins(bot, t.admin_appointment(appt, clinic_name, service_name, username))
+    await report.new_appointment(appt, clinic_name, service_name, username)
+
     if tg_user:
         try:
             await bot.send_message(
@@ -171,6 +171,9 @@ async def create_appointment(
 async def create_consultation(
     payload: ConsultationIn, s: AsyncSession = Depends(get_session)
 ) -> dict:
+    if not ASK_ENABLED:
+        raise HTTPException(503, "Murojaat bo'limi hozircha yopiq — AI-konsultant tayyorlanmoqda")
+
     msg = payload.message.strip()
     if len(msg) < 5:
         raise HTTPException(400, "Savol juda qisqa")
@@ -195,14 +198,28 @@ async def create_consultation(
         c.status = "answered"
         await s.commit()
 
+    username = f"@{tg_user.username}" if tg_user and tg_user.username else "Mini App"
+
     from app.bot.handlers import notify_admins
     from app.bot.instance import bot
 
-    await notify_admins(
-        bot,
-        t.admin_consultation(
-            c, f"@{tg_user.username}" if tg_user and tg_user.username else "Mini App"
-        ),
-    )
+    await notify_admins(bot, t.admin_consultation(c, username))
+    await report.new_consultation(c, username)
 
     return {"ok": True, "id": c.id, "answer": reply}
+
+
+# ─────────────────────────── Kunlik xulosa ───────────────────────────
+@router.get("/report/daily")
+async def daily_report(key: str = "") -> dict:
+    """Kunlik xulosani hisobot botiga yuboradi.
+
+    cron-job.org kabi xizmatdan har kuni chaqiriladi:
+    https://<servis>.onrender.com/api/report/daily?key=<WEBHOOK_SECRET>
+    """
+    from app.config import WEBHOOK_SECRET
+
+    if key != WEBHOOK_SECRET:
+        raise HTTPException(403, "Kalit noto'g'ri")
+    text = await report.daily_summary()
+    return {"ok": True, "length": len(text)}

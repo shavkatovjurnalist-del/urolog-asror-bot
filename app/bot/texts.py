@@ -112,6 +112,16 @@ DISCLAIMER = (
     "bosmaydi. Aniq tashxis uchun qabulga yoziling.</i>"
 )
 
+ASK_DISABLED = (
+    "🤖 <b>AI-konsultant tayyorlanmoqda</b>\n\n"
+    "Bu bo'lim tez orada ishga tushadi — sun'iy intellekt savolingizga bir zumda "
+    "javob beradi.\n\n"
+    "Hozircha:\n"
+    "• 📅 «Qabulga yozilish» orqali ariza qoldiring;\n"
+    "• 📞 +998 90 008 38 78 raqamiga qo'ng'iroq qiling;\n"
+    "• ✈️ yoki shifokorga Telegram orqali yozing."
+)
+
 ASK_PLACEHOLDER = (
     "✅ Murojaatingiz qabul qilindi va shifokorga yuborildi.\n\n"
     "🤖 Tez orada bu bo'limga <b>AI-konsultant</b> ulanadi — u savolingizga bir zumda "

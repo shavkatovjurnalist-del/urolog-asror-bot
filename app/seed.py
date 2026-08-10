@@ -232,7 +232,8 @@ CLINICS = [
         address="Samarqand shahar, Laxuti ko'chasi, 2A",
         landmark="Mo'ljal: 6-hammom, Brilliant City",
         map_url="https://yandex.uz/maps/-/CTAduM2O",
-        latitude=39.654, longitude=66.959,
+        # Yandex qisqa havolasidan olingan aniq koordinata
+        latitude=39.661389, longitude=66.945694,
         photo="/app/assets/clinic3.webp",
         work_hours="Dush–Shan, 09:00 – 19:00",
     ),
@@ -241,7 +242,9 @@ CLINICS = [
         address="Samarqand shahar, Ozod Sharq ko'chasi, 8-uy",
         landmark="",
         map_url="https://yandex.uz/maps/?text=Samarqand+Ozod+Sharq+ko'chasi+8",
-        latitude=39.665, longitude=66.975,
+        # Aniq koordinata hali yo'q — shifokordan olingach shu yerga yoziladi.
+        # Bo'sh bo'lsa bot geolokatsiya yubormaydi, faqat xarita havolasi beriladi.
+        latitude=None, longitude=None,
         photo="/app/assets/clinic4.webp",
         work_hours="Dush–Shan, 09:00 – 19:00",
     ),

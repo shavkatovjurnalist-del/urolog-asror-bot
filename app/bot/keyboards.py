@@ -9,7 +9,7 @@ from aiogram.types import (
     WebAppInfo,
 )
 
-from app.config import BASE_URL, WEBAPP_URL
+from app.config import ASK_ENABLED, BASE_URL, WEBAPP_URL
 
 # Telegram faqat https manzilli Web App tugmalarini qabul qiladi.
 # Lokal sinovda (http://localhost) tugmalar ko'rsatilmaydi.
@@ -38,7 +38,9 @@ def main_menu() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_SERVICES), KeyboardButton(text=BTN_METHODS)],
             [KeyboardButton(text=BTN_CLINICS), KeyboardButton(text=BTN_RESULTS)],
             [KeyboardButton(text=BTN_DOCTOR), KeyboardButton(text=BTN_FAQ)],
-            [KeyboardButton(text=BTN_BOOK), KeyboardButton(text=BTN_ASK)],
+            # «Murojaat» AI agent ulangach ochiladi (ASK_ENABLED=true)
+            [KeyboardButton(text=BTN_BOOK), KeyboardButton(text=BTN_ASK)]
+            if ASK_ENABLED else [KeyboardButton(text=BTN_BOOK)],
             [KeyboardButton(text=BTN_CONTACT)],
         ],
         resize_keyboard=True,
