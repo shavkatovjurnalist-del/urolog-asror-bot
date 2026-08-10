@@ -13,10 +13,11 @@ from app.config import BASE_URL, BOT_TOKEN, WEBHOOK_PATH
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
+# Bemorlar ko'radigan buyruqlar. `/id` va `/stats` ro'yxatga qo'shilmaydi —
+# ular faqat adminlar uchun, qo'lda yozilganda ishlaydi.
 COMMANDS = [
     {"command": "start", "description": "Botni ishga tushirish"},
     {"command": "menu", "description": "Asosiy menyu"},
-    {"command": "id", "description": "Telegram ID raqamim"},
 ]
 
 
