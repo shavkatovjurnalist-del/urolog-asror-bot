@@ -134,8 +134,8 @@ async def new_consultation(c: Consultation, username: str) -> None:
 async def live_chat_transcript(history: list[dict], username: str, tg_id: int) -> None:
     """Jonli suhbat yakunlangach to'liq yozuvni shifokorga yuboradi.
 
-    Suhbat bazadan tozalanadi (bepul tarif, o'sib ketmasin) — doimiy nusxa
-    aynan shu xabar bo'ladi.
+    Suhbat bazada ham qoladi (`chat_messages.archived_at`) — bu xabar
+    shifokor darhol ko'rishi uchun, baza esa tahlil uchun.
     """
     if not history:
         return

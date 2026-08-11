@@ -276,9 +276,10 @@ RESULTS = [
 
 FAQ = [
     dict(question="Qabulga qanday yozilaman?",
-         answer="Bot orqali «Qabulga yozilish» tugmasini bosing, ism va telefon raqamingizni "
-                "qoldiring — shifokor jamoasi siz bilan bog'lanadi. Yoki to'g'ridan-to'g'ri "
-                "+998 90 008 38 78 raqamiga qo'ng'iroq qilishingiz mumkin."),
+         answer="Navbat jonli — oldindan qat'iy yozilish shart emas. Keladigan kuningiz "
+                "+998 90 008 38 78 raqamiga qo'ng'iroq qilib kelavering. Xohlasangiz bot "
+                "orqali «Qabulga yozilish» tugmasini bosib qulay vaqtni ham belgilab "
+                "qo'yishingiz mumkin."),
     dict(question="Qabul kunlari va vaqti qanday?",
          answer="Dushanbadan Jumagacha, soat 09:00 dan 16:00 gacha. Tushlik 13:00 – 14:00. "
                 "Shanba va yakshanba — dam olish kunlari. Navbat jonli, oldindan qat'iy "

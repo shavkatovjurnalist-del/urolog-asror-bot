@@ -502,7 +502,7 @@ async def live_start(message: Message, state: FSMContext) -> None:
     async with session_scope() as s:
         await repo.upsert_user(s, message.from_user)
         # Yangi suhbat — eski tarix aralashmasin.
-        await repo.clear_chat_history(s, message.from_user.id)
+        await repo.archive_chat_history(s, message.from_user.id)
         await repo.add_chat_message(
             s, message.from_user.id, "model", persona.GREETING, source="bot"
         )
@@ -593,11 +593,15 @@ async def live_message(message: Message, state: FSMContext) -> None:
 
 
 async def _finish_live(message: Message, state: FSMContext, by_user: bool) -> None:
-    """Suhbatni yopadi: tarixni shifokorga yuboradi va bazadan tozalaydi."""
+    """Suhbatni yopadi: tarixni shifokorga yuboradi va arxivga o'tkazadi.
+
+    Arxivlangan xabarlar bazada qoladi (o'chirilmaydi) — ular AI ni o'qitish
+    manbai: `python -m scripts.export_chats`.
+    """
     tg_id = message.from_user.id
     async with session_scope() as s:
         history = await repo.get_chat_history(s, tg_id, limit=60)
-        await repo.clear_chat_history(s, tg_id)
+        await repo.archive_chat_history(s, tg_id)
     await state.clear()
 
     if len([m for m in history if m["role"] == "user"]) > 0:

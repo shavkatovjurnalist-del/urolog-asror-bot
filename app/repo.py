@@ -1,7 +1,9 @@
 """Bazadan kontent o'qish — bot va Mini App API uchun umumiy qatlam."""
 from __future__ import annotations
 
-from sqlalchemy import delete, select
+from datetime import datetime
+
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -102,10 +104,14 @@ async def add_chat_message(
 
 
 async def get_chat_history(s: AsyncSession, tg_id: int, limit: int = 14) -> list[dict]:
-    """Modelga beriladigan suhbat tarixi — eng eskisi birinchi."""
+    """Modelga beriladigan suhbat tarixi — eng eskisi birinchi.
+
+    Arxivlangan (yakunlangan) suhbatlar olinmaydi: yangi murojaat toza
+    varaqdan boshlanadi.
+    """
     q = (
         select(ChatMessage)
-        .where(ChatMessage.tg_id == tg_id)
+        .where(ChatMessage.tg_id == tg_id, ChatMessage.archived_at.is_(None))
         .order_by(ChatMessage.id.desc())
         .limit(limit)
     )
@@ -113,7 +119,16 @@ async def get_chat_history(s: AsyncSession, tg_id: int, limit: int = 14) -> list
     return [{"role": m.role, "text": m.text} for m in reversed(rows)]
 
 
-async def clear_chat_history(s: AsyncSession, tg_id: int) -> None:
-    """Suhbat yakunlanganda tarix tozalanadi — keyingi murojaat toza boshlanadi."""
-    await s.execute(delete(ChatMessage).where(ChatMessage.tg_id == tg_id))
+async def archive_chat_history(s: AsyncSession, tg_id: int) -> int:
+    """Suhbatni yopadi: qatorlar o'chirilmaydi, `archived_at` to'ldiriladi.
+
+    Nima uchun o'chirilmaydi: haqiqiy suhbatlar AI ni o'qitishning asosiy
+    manbai. Ularni ko'rish: `python -m scripts.export_chats`.
+    """
+    res = await s.execute(
+        update(ChatMessage)
+        .where(ChatMessage.tg_id == tg_id, ChatMessage.archived_at.is_(None))
+        .values(archived_at=datetime.utcnow())
+    )
     await s.commit()
+    return res.rowcount or 0

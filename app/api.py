@@ -257,7 +257,7 @@ def _require_chat_user(init_data: str):
 async def chat_start(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> dict:
     tg_user = _require_chat_user(payload.init_data)
     await repo.upsert_user(s, tg_user, source="webapp")
-    await repo.clear_chat_history(s, tg_user.id)
+    await repo.archive_chat_history(s, tg_user.id)
     await repo.add_chat_message(
         s, tg_user.id, "model", persona.GREETING, source="webapp"
     )
@@ -330,7 +330,7 @@ async def chat_send(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> 
 async def chat_end(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> dict:
     tg_user = _require_chat_user(payload.init_data)
     history = await repo.get_chat_history(s, tg_user.id, limit=60)
-    await repo.clear_chat_history(s, tg_user.id)
+    await repo.archive_chat_history(s, tg_user.id)
     if any(m["role"] == "user" for m in history):
         username = f"@{tg_user.username}" if tg_user.username else "Mini App"
         await report.live_chat_transcript(history, username, tg_user.id)

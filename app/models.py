@@ -173,6 +173,10 @@ class ChatMessage(Base):
     Har xabar (bemorniki ham, AI niki ham) shu yerga yoziladi. Keyingi javobda
     oxirgi bir nechtasi modelga kontekst sifatida beriladi. Suhbat botda ham,
     Mini App'da ham bitta `tg_id` bo'yicha davom etadi.
+
+    Suhbat yakunlanganda qatorlar **o'chirilmaydi** — `archived_at` to'ldiriladi.
+    Arxivlangan xabar AI kontekstiga tushmaydi, lekin bazada qoladi: bular
+    o'qitishning asosiy manbai (`scripts/export_chats.py`).
     """
 
     __tablename__ = "chat_messages"
@@ -185,6 +189,8 @@ class ChatMessage(Base):
     # Qoidalar ishga tushgan bo'lsa shu yerda: narx, eski_klinika, shoshilinch…
     flags: Mapped[str] = mapped_column(String(120), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # NULL = suhbat davom etyapti; to'ldirilgan = yakunlangan, arxivda
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Consultation(Base):

@@ -172,7 +172,10 @@ Surunkali kasalliklar (diabet, gipertoniya, yurak, semizlik) klinikada
 alohida gaplashiladi.
 Operatsiya kechiktiriladi: o'tkir infeksiya, yuqori qand, qon ivishi buzilganda.
 
-OPERATSIYADAN KEYIN
+OPERATSIYADAN KEYIN (UMUMIY MUDDATLAR)
+Quyidagilar umumiy — agar yuqorida aniq operatsiya uchun boshqa muddat
+ko'rsatilgan bo'lsa, O'SHA USTUN turadi. Masalan varikotseledan keyin sportga
+1 oydan keyin qaytiladi, umumiy 20 kun emas.
 O'rtacha 1-2 kun kasalxonada yotiladi.
 Ishga va mashina haydashga 10 kundan keyin; sport, og'ir yuk, jinsiy hayot,
 cho'milish, hammom, sauna va uzoq safar — 20 kundan keyin.
