@@ -37,7 +37,9 @@ DOCTOR = dict(
     ),
     photo="/app/assets/asror.webp",
     phone="+998 90 008 38 78",
-    email="dr.torayev@medical.uz",
+    # Email ishlatilmaydi — bemorlar so'ramaydi, saytdagi manzil ham
+    # tasdiqlanmagan edi. Bo'sh bo'lsa bot va Mini App uni ko'rsatmaydi.
+    email="",
     telegram="https://t.me/urolog_asrorturayev",
     instagram="https://www.instagram.com/urolog_asrorturayev/",
     youtube="https://youtube.com/@samarqand_urolog",

@@ -64,15 +64,17 @@ def advantages_text(items) -> str:
 
 
 def contact_text(doctor) -> str:
-    return (
-        f"📞 <b>Aloqa</b>\n\n"
-        f"Bemorlar oldindan yozilish asosida qabul qilinadi.\n\n"
-        f"🗓 <b>Ish kunlari:</b> {escape(doctor.work_hours)}\n"
-        f"📱 <b>Telefon:</b> {escape(doctor.phone)}\n"
-        f"✉️ <b>Email:</b> {escape(doctor.email)}\n"
-        f"🌐 <b>Sayt:</b> {escape(doctor.website)}\n\n"
-        f"📍 Samarqand shahri"
-    )
+    lines = [
+        "📞 <b>Aloqa</b>\n",
+        "Navbat jonli — keladigan kuningiz telefon qilib kelavering.\n",
+        f"🗓 <b>Qabul kunlari:</b> {escape(doctor.work_hours)}",
+        f"📱 <b>Telefon:</b> {escape(doctor.phone)}",
+    ]
+    if doctor.email:  # hozir bo'sh — email ishlatilmaydi
+        lines.append(f"✉️ <b>Email:</b> {escape(doctor.email)}")
+    lines.append(f"🌐 <b>Sayt:</b> {escape(doctor.website)}")
+    lines.append("\n📍 Samarqand shahri, Sintez Lab Klinikasi")
+    return "\n".join(lines)
 
 
 PICK_DATE = (

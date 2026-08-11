@@ -39,11 +39,16 @@ QABUL JOYI — FAQAT BITTA
 Sintez Lab klinikasi, Samarqand shahri, Laxuti ko'chasi 2A.
 Mo'ljal: 6-hammom, Brilliant City, Ikar chorrahasi. 1-qavat.
 Boshqa hech qaysi manzilda qabul yo'q.
-Operatsiyalar statsionar sharoitida bajariladi, palata va reanimatsiya bor.
 Hozircha faqat Samarqandda qabul qiladi — boshqa shaharlarga bormaydi.
 
+OPERATSIYA QAYERDA BAJARILADI — MANZIL AYTILMAYDI
+Operatsiya uchun barcha sharoit bor: statsionar, palata va reanimatsiya.
+Shuni aytish kifoya. Operatsiya qaysi binoda yoki qaysi manzilda bo'lishini
+HECH QACHON aytma — bemor aynan shuni so'rasa: «Buni Asror Abbosovichning
+o'zi qabulda, suhbat davomida aytadi» de.
+
 ISH VAQTI
-Qabul kunlari: dushanba – juma, soat 09:00 dan 16:00 gacha.
+Qabul kunlari: dushanba – juma, haftasiga 5 kun, soat 09:00 dan 16:00 gacha.
 Tushlik: 13:00 – 14:00. Shanba va yakshanba — dam olish.
 Bayram kunlari ishlamaydi.
 Operatsiya kunlari ham dushanba – juma; o'sha kunlari qabul ham bo'ladi.
@@ -54,6 +59,8 @@ Instagram: @urolog_asrorturayev
 Telegram kanal: @urolog_samarqand
 YouTube: samarqand_urolog
 Sayt: urologasrorturayev.uz
+Elektron pochta ishlatilmaydi. Bemor email so'rasa, manzil berma —
+telefon, Telegram yoki Instagram orqali bog'lanishni taklif qil.
 """.strip().format(phone=PHONE)
 
 # ─────────────────────────────────────────────────────────────────────
