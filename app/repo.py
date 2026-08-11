@@ -119,6 +119,21 @@ async def get_chat_history(s: AsyncSession, tg_id: int, limit: int = 14) -> list
     return [{"role": m.role, "text": m.text} for m in reversed(rows)]
 
 
+async def has_open_chat(s: AsyncSession, tg_id: int) -> bool:
+    """Yakunlanmagan jonli suhbat bormi.
+
+    Kerak: bot qayta ishga tushganda FSM holati (MemoryStorage) yo'qoladi,
+    lekin bemor uchun suhbat davom etayotgan bo'ladi. Shu bayroq bo'yicha
+    holat tiklanadi — bemor «Menyudan tanlang» degan javob olmaydi.
+    """
+    q = (
+        select(ChatMessage.id)
+        .where(ChatMessage.tg_id == tg_id, ChatMessage.archived_at.is_(None))
+        .limit(1)
+    )
+    return (await s.execute(q)).scalar_one_or_none() is not None
+
+
 async def archive_chat_history(s: AsyncSession, tg_id: int) -> int:
     """Suhbatni yopadi: qatorlar o'chirilmaydi, `archived_at` to'ldiriladi.
 

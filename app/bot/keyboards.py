@@ -32,7 +32,16 @@ BTN_END_CHAT = "✅ Suhbatni yakunlash"
 
 
 def main_menu() -> ReplyKeyboardMarkup:
-    rows = []
+    """Asosiy menyu.
+
+    Tartib ataylab shunday: «💬 Jonli murojaat» — eng birinchi qatorda va
+    yolg'iz turadi. Bu botning eng muhim funksiyasi, mijoz kirgan zahoti
+    ko'rishi kerak; pastda tursa u umuman sezilmay qolardi.
+    """
+    rows: list[list[KeyboardButton]] = []
+    if ASK_ENABLED:
+        rows.append([KeyboardButton(text=BTN_LIVE)])
+    rows.append([KeyboardButton(text=BTN_BOOK)])
     if WEBAPP_ENABLED:
         rows.append([KeyboardButton(text=BTN_WEBAPP, web_app=WebAppInfo(url=WEBAPP_URL))])
     return ReplyKeyboardMarkup(
@@ -41,13 +50,10 @@ def main_menu() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_SERVICES), KeyboardButton(text=BTN_METHODS)],
             [KeyboardButton(text=BTN_CLINICS), KeyboardButton(text=BTN_RESULTS)],
             [KeyboardButton(text=BTN_DOCTOR), KeyboardButton(text=BTN_FAQ)],
-            # «Jonli murojaat» — AI bilan suhbat (ASK_ENABLED=true bo'lganda)
-            [KeyboardButton(text=BTN_BOOK), KeyboardButton(text=BTN_LIVE)]
-            if ASK_ENABLED else [KeyboardButton(text=BTN_BOOK)],
             [KeyboardButton(text=BTN_CONTACT)],
         ],
         resize_keyboard=True,
-        input_field_placeholder="Menyudan tanlang yoki savolingizni yozing…",
+        input_field_placeholder="Savolingizni shu yerga yozing…",
     )
 
 

@@ -10,10 +10,10 @@ def welcome(doctor) -> str:
         f"<b>{escape(doctor.short_name)}</b> — {escape(doctor.specialty)}\n"
         f"🏅 {escape(doctor.category)} · 🕐 Tajriba: {escape(doctor.experience)}\n"
         f"📍 Samarqand shahri\n\n"
-        f"Bu yerda siz shifokorning xizmatlari, jarrohlik usullari, qabul joylari va "
-        f"natijalari bilan tanishishingiz, hamda <b>qabulga yozilishingiz</b> mumkin.\n\n"
-        f"🌐 Saytning to'liq versiyasini <b>Telegramdan chiqmasdan</b> ochish uchun "
-        f"«{escape('🌐 Sayt (Mini App)')}» tugmasini bosing."
+        f"💬 <b>Savolingiz bormi?</b> Pastdagi «{escape('💬 Jonli murojaat')}» "
+        f"tugmasini bosing — shifokorning admini bilan shu yerda yozishasiz.\n\n"
+        f"Bundan tashqari qabulga yozilishingiz, xizmatlar, jarrohlik usullari, "
+        f"qabul joylari va natijalar bilan tanishishingiz mumkin."
     )
 
 

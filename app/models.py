@@ -193,6 +193,37 @@ class ChatMessage(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class SupportThread(Base):
+    """Operator guruhidagi mavzu (topic) — har bemorga bittadan.
+
+    Nima uchun kerak: Telegramda bir vaqtda bir necha bemor yozadi. Agar
+    hammasi bitta oqimga tushsa, jonli admin kim nima yozganini ajrata
+    olmaydi. Shuning uchun guruh «forum» rejimida ishlaydi va har bemorning
+    suhbati o'z mavzusida jonli ko'chib boradi. Admin o'sha mavzuga yozsa —
+    javob bemorga ketadi.
+
+    `mode`:
+      • `ai`    — odatdagi holat, javobni AI yozadi;
+      • `human` — suhbatga odam aralashdi, AI jim turadi.
+
+    AI `HUMAN_PAUSE_MINUTES` (odatda 60 daqiqa) o'tgach o'zi qaytadi:
+    shifokorning qarori — admin unutib qo'ysa ham bemor javobsiz qolmasin.
+    Odam yozgan xabarlar `chat_messages` ga `role='model'` bo'lib tushadi,
+    shuning uchun qaytgan AI ular bilan tanishgan holda davom etadi.
+    """
+
+    __tablename__ = "support_threads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    topic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    mode: Mapped[str] = mapped_column(String(10), default="ai")  # ai | human
+    # Oxirgi marta odam javob bergan payt — pauza shundan hisoblanadi.
+    human_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    title: Mapped[str] = mapped_column(String(160), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class Consultation(Base):
     """Murojaatlar / savollar.
 

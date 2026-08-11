@@ -14,6 +14,7 @@ Kontekst 10 daqiqaga keshlanadi — har xabarda bazani qayta o'qish shart emas.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -96,6 +97,25 @@ async def build_context(force: bool = False) -> str:
 # to'sadi.
 _MEDFAST_RE = re.compile(r"med\s*fast|ozod\s*sharq", re.IGNORECASE)
 
+# Narx RO'YXATI — alohida to'siq (2026-08-11, shifokorning talabi).
+# Muammo: «hamma operatsiyalar narxini ayt» deb so'ralganda model butun
+# prays-listni bir xabarda sanab tashlardi. Bemor bunday ro'yxat so'ramaydi
+# va u klinikaning obro'siga zarar qiladi. Promptdagi qoida yetarli emas —
+# model «so'radi-ku» deb baribir sanab berardi, shuning uchun to'siq kodda.
+#
+# Nima sanaladi: «raqam + pul birligi». Oraliq («13-16 million so'm») bitta
+# hisoblanadi, chunki birinchi raqamdan keyin birlik yo'q.
+_PRICE_ITEM_RE = re.compile(r"\d[\d\s.,]*\s*(?:ming|mln|million|so'?m|som)", re.IGNORECASE)
+
+# Ikkita xizmat + ularning oraliqlari — ko'pi bilan 4 ta raqam. Undan
+# ortig'i ro'yxat degani. Chegarani pasaytirmang: «29 milliondan 168 million
+# so'mgacha» kabi bitta javobning o'zi 2 ta raqam beradi.
+_PRICE_LIST_LIMIT = 4
+
+_PRICE_LIST_REPLY = (
+    "Qaysi masala bo'yicha qiziqyapsiz? Ayting, o'shanisining narxini aniq aytaman."
+)
+
 
 def _clean(text: str) -> str:
     """Emoji, markdown va boshqa robot izlarini olib tashlaydi."""
@@ -140,6 +160,33 @@ def asks_price(text: str) -> bool:
     return bool(_PRICE_ASK_RE.search(text or ""))
 
 
+# Manzil so'ralganda matn bilan yo'l ko'rsatilmaydi — xaritadagi nuqta
+# yuboriladi (shifokorning talabi). Bu yerda faqat savolni tanib olamiz.
+_LOCATION_ASK_RE = re.compile(
+    r"qayerda(?!\s*og'?ri)|qayerga|manzil|lokatsiya|joylash|"
+    r"qanday bor(a|i)|qanday yetib|xarita|мест|адрес|где вы|как доехать|карт",
+    re.IGNORECASE,
+)
+
+
+def asks_location(text: str) -> bool:
+    return bool(_LOCATION_ASK_RE.search(text or ""))
+
+
+# Model bemorni tushunmaganini aytdi — javob mijozga ketaveradi, lekin
+# suhbat jonli adminga uzatiladi (shifokorning talabi: noaniq xabarni
+# odam ko'rsin).
+_UNCLEAR_RE = re.compile(
+    r"tushunmadim|tushunolmadim|tushunarsiz|aniqroq (qilib )?(yoz|ayt)|"
+    r"savolingizni.{0,20}tushun",
+    re.IGNORECASE,
+)
+
+
+def is_unclear(reply: str) -> bool:
+    return bool(_UNCLEAR_RE.search(reply or ""))
+
+
 # ─────────────────────────── Til va alifbo ───────────────────────────
 # Promptdagi qoida yetarli emas: model kirillcha savolga lotinda javob berib
 # yuboradi. Shuning uchun alifbo kodda aniqlanib, har so'rovga aniq
@@ -178,6 +225,10 @@ def guard(text: str) -> tuple[str, list[str]]:
     if _MEDFAST_RE.search(text):
         hits.append("eski_klinika")
         text = _MEDFAST_RE.sub("Sintez Lab", text)
+
+    if len(_PRICE_ITEM_RE.findall(text)) > _PRICE_LIST_LIMIT:
+        hits.append("narx_royxati")
+        text = _PRICE_LIST_REPLY
 
     return text, hits
 
@@ -226,10 +277,18 @@ async def chat(
 
     url = API_URL.format(model=AI_MODEL)
     try:
+        # Gemini vaqti-vaqti bilan 500/503 qaytaradi (o'z tomonidagi
+        # vaqtinchalik nosozlik). Bir marta qayta urinamiz — aks holda
+        # bemor sababsiz «nosozlik chiqdi» degan javob olardi.
         async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.post(
-                url, json=payload, headers={"x-goog-api-key": AI_API_KEY}
-            )
+            for attempt in range(2):
+                r = await client.post(
+                    url, json=payload, headers={"x-goog-api-key": AI_API_KEY}
+                )
+                if r.status_code < 500 or attempt:
+                    break
+                log.warning("Gemini %s — qayta urinamiz", r.status_code)
+                await asyncio.sleep(1.5)
         if r.status_code != 200:
             log.warning("Gemini %s: %s", r.status_code, r.text[:300])
             return None, [f"http_{r.status_code}"]
@@ -250,6 +309,71 @@ async def chat(
     except Exception as e:
         log.warning("Gemini xatosi: %s", e)
         return None, ["xato"]
+
+
+# ─────────────────────────── Ovozli xabar → matn ───────────────────────────
+# Shifokorning qarori: ovozli xabar matnga o'girilsa AI unga darhol javob
+# beradi. O'girib bo'lmasa — bemordan yozib yuborish so'raladi va suhbat
+# jonli adminga uzatiladi. Rasm esa O'QILMAYDI: shifokor masofadan turib
+# tashxis qo'ymaydi, rasm shunchaki unga yetkaziladi.
+_TRANSCRIBE_PROMPT = """
+Bu ovozli xabarni so'zma-so'z matnga o'gir. Xabar o'zbek (lotin yoki kirill)
+yoki rus tilida bo'lishi mumkin — qaysi tilda aytilgan bo'lsa, o'sha tilda yoz.
+
+Faqat matnning o'zini qaytar: izoh, sarlavha, tirnoq belgisi qo'shma.
+
+Agar ovoz eshitilmasa, shovqin bo'lsa, nutq umuman bo'lmasa yoki aytilgan
+gapni aniq ajratib bo'lmasa — hech narsa taxmin qilmasdan faqat shu so'zni
+yoz: NOANIQ
+""".strip()
+
+# Juda qisqa natija ham ishonchsiz: «ha», «a» kabi bitta bo'g'in ko'pincha
+# shovqindan chiqadi.
+_MIN_TRANSCRIPT = 4
+
+
+async def transcribe(data: bytes, mime: str = "audio/ogg") -> str | None:
+    """Ovozli xabar matni, yoki ishonchli o'girib bo'lmasa `None`."""
+    if not AI_ENABLED or not AI_API_KEY:
+        return None
+
+    import base64
+
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": _TRANSCRIBE_PROMPT},
+                {"inlineData": {"mimeType": mime,
+                                "data": base64.b64encode(data).decode()}},
+            ],
+        }],
+        # Transkripsiyada ijod kerak emas — nol temperatura.
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 500},
+    }
+
+    url = API_URL.format(model=AI_MODEL)
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                url, json=payload, headers={"x-goog-api-key": AI_API_KEY}
+            )
+        if r.status_code != 200:
+            log.warning("Transkripsiya %s: %s", r.status_code, r.text[:200])
+            return None
+        cands = r.json().get("candidates") or []
+        if not cands:
+            return None
+        text = "".join(
+            p.get("text", "") for p in cands[0].get("content", {}).get("parts", [])
+        ).strip()
+    except Exception as e:
+        log.warning("Transkripsiya xatosi: %s", e)
+        return None
+
+    if not text or len(text) < _MIN_TRANSCRIPT or "NOANIQ" in text.upper():
+        return None
+    return text
 
 
 # ─────────────────────────── Eski chaqiruv joyi ───────────────────────────

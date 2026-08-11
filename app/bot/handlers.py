@@ -18,11 +18,11 @@ from aiogram.types import (
     Message,
 )
 
-from app import ai, persona, repo, report
+from app import ai, persona, repo, report, support
 from app.bot import calendar as cal
 from app.bot import keyboards as kb
 from app.bot import texts as t
-from app.config import ADMIN_IDS, ASK_ENABLED, BASE_DIR
+from app.config import ADMIN_IDS, ASK_ENABLED, BASE_DIR, SUPPORT_GROUP_ID
 from app.db import session_scope
 from app.models import Consultation
 
@@ -33,6 +33,10 @@ router = Router()
 # (`app/bot/instance.py`). Sabab: suhbat davomida bemor yozgan har qanday matn
 # AI ga borishi kerak — menyu tugmalarining matnini yozib yuborsa ham.
 live_router = Router()
+
+# Operator guruhidan keladigan xabarlar — eng birinchi tekshiriladi, aks holda
+# ular oddiy bemor xabari deb qabul qilinardi.
+support_router = Router()
 
 PHOTO_DOCTOR = BASE_DIR / "webapp" / "assets" / "asror.webp"
 
@@ -534,28 +538,101 @@ async def live_to_booking(message: Message, state: FSMContext) -> None:
     await book_start(message, state)
 
 
-@live_router.message(Live.chatting, F.photo | F.voice | F.video_note | F.document)
-async def live_media(message: Message, state: FSMContext) -> None:
-    """Rasm va ovozli xabar. Anketa: cheklov yo'q, shifokorning o'zi ko'radi."""
-    note = "[bemor rasm/ovozli xabar yubordi]"
-    async with session_scope() as s:
-        await repo.add_chat_message(s, message.from_user.id, "user", note, flags="media")
-    reply = (
-        "Yuborganingizni oldim. Asror Abbosovichning o'zi ko'rib chiqadi va "
-        "javobini aytadi.\n\nShu orada yozma savolingiz bo'lsa, bemalol yozavering."
+# Ovozli xabarning yuqori chegarasi. Gemini ga base64 qilib yuboriladi,
+# uzun yozuv so'rovni og'irlashtiradi va javobni kechiktiradi.
+MAX_VOICE_BYTES = 8 * 1024 * 1024
+
+RASM_JAVOBI = (
+    "Rasmni oldim, Asror Abbosovichga yetkazaman. Faqat shuni aytib qo'yay — "
+    "shifokor ko'pincha masofadan turib tashxis qo'ymaydi, aniq javob uchun "
+    "ko'rikdan o'tish kerak bo'ladi."
+)
+
+OVOZ_TUSHUNARSIZ = (
+    "Kechirasiz, ovozli xabaringizni aniq eshitolmadim. Iltimos, "
+    "savolingizni matn qilib yozib yuboring — shunda aniq javob beraman."
+)
+
+
+@live_router.message(Live.chatting, F.voice | F.audio | F.video_note)
+async def live_voice(message: Message, state: FSMContext) -> None:
+    """Ovozli xabar: matnga o'girilib, oddiy savol kabi javob beriladi.
+
+    O'girib bo'lmasa — bemordan yozib yuborish so'raladi va suhbat jonli
+    adminga uzatiladi (shifokorning qarori: sifatli o'girilganda admin
+    bezovta qilinmaydi).
+    """
+    media = message.voice or message.audio or message.video_note
+    await support.relay_user_media(
+        message.bot, message.from_user, message, "ovozli xabar yubordi"
+    )
+
+    text = None
+    if media and (media.file_size or 0) <= MAX_VOICE_BYTES:
+        try:
+            buf = await message.bot.download(media.file_id)
+            mime = getattr(media, "mime_type", None) or "audio/ogg"
+            await message.bot.send_chat_action(message.chat.id, "typing")
+            text = await ai.transcribe(buf.read(), mime)
+        except Exception as e:
+            log.warning("Ovozli xabar yuklanmadi (%s): %s", message.from_user.id, e)
+
+    if not text:
+        async with session_scope() as s:
+            await repo.add_chat_message(
+                s, message.from_user.id, "user", "[ovozli xabar — o'girib bo'lmadi]",
+                flags="ovoz_noaniq",
+            )
+            await repo.add_chat_message(
+                s, message.from_user.id, "model", OVOZ_TUSHUNARSIZ, flags="ovoz_noaniq"
+            )
+        await message.answer(OVOZ_TUSHUNARSIZ, reply_markup=kb.live_chat_kb())
+        await _escalate(message, state, "🎤 Ovozli xabar tushunilmadi", "[ovozli xabar]")
+        return
+
+    # Matnga o'girildi — bundan keyin oddiy savol kabi ishlanadi.
+    await support.notify(
+        message.bot, message.from_user.id, f"🎤 <i>matnga o'girildi:</i> {escape(text)}"
+    )
+    await _handle_patient_text(message, state, text, relayed=True)
+
+
+@live_router.message(Live.chatting, F.photo | F.document)
+async def live_photo(message: Message, state: FSMContext) -> None:
+    """Rasm va hujjat. Shifokorning qarori: rasm O'QILMAYDI, u odamga uzatiladi."""
+    note = "[bemor rasm/hujjat yubordi]"
+    await support.relay_user_media(
+        message.bot, message.from_user, message, "rasm/hujjat yubordi"
     )
     async with session_scope() as s:
-        await repo.add_chat_message(s, message.from_user.id, "model", reply)
-    await message.answer(reply, reply_markup=kb.live_chat_kb())
-    await _escalate(message, state, "Rasm / ovozli xabar yuborildi", note)
+        await repo.add_chat_message(s, message.from_user.id, "user", note, flags="media")
+        await repo.add_chat_message(s, message.from_user.id, "model", RASM_JAVOBI)
+    await message.answer(RASM_JAVOBI, reply_markup=kb.live_chat_kb())
+    await _escalate(message, state, "🖼 Rasm / hujjat yuborildi", note)
 
 
 @live_router.message(Live.chatting, F.text)
 async def live_message(message: Message, state: FSMContext) -> None:
-    text = message.text.strip()
+    await _handle_patient_text(message, state, message.text.strip())
+
+
+async def _handle_patient_text(
+    message: Message, state: FSMContext, text: str, relayed: bool = False
+) -> None:
+    """Bemorning savoliga javob — matn ham, ovozdan o'girilgani ham shu yerdan.
+
+    `relayed=True` — xabar operator guruhiga allaqachon ko'chirilgan
+    (ovozli xabar o'z fayli bilan tushgan), ikkinchi marta ko'chirilmaydi.
+    """
     tg_id = message.from_user.id
 
-    # 1. Shoshilinch holat — modelga umuman bormaydi.
+    # 0. Bemor yozgani operator guruhidagi o'z mavzusiga ko'chadi — jonli
+    #    admin suhbatni real vaqtda kuzatib turadi.
+    if not relayed:
+        await support.relay_user_text(message.bot, message.from_user, text)
+
+    # 1. Shoshilinch holat — modelga umuman bormaydi. Odam suhbatda bo'lsa
+    #    ham shu javob beriladi: kechiktirib bo'lmaydigan holat.
     if ai.is_urgent(text):
         async with session_scope() as s:
             await repo.add_chat_message(s, tg_id, "user", text, flags="shoshilinch")
@@ -564,7 +641,14 @@ async def live_message(message: Message, state: FSMContext) -> None:
         await _escalate(message, state, "🚨 SHOSHILINCH", text)
         return
 
-    # 2. Suhbat tarixi bilan modelga
+    # 2. Suhbatga odam aralashgan bo'lsa AI jim turadi — javobni admin
+    #    guruhdan yozadi. Pauza tugagach AI o'zi qaytadi.
+    if await support.is_paused(tg_id):
+        async with session_scope() as s:
+            await repo.add_chat_message(s, tg_id, "user", text, flags="odam_rejimi")
+        return
+
+    # 3. Suhbat tarixi bilan modelga
     async with session_scope() as s:
         history = await repo.get_chat_history(s, tg_id, limit=ai.HISTORY_LIMIT)
         await repo.add_chat_message(s, tg_id, "user", text)
@@ -584,12 +668,36 @@ async def live_message(message: Message, state: FSMContext) -> None:
         await repo.add_chat_message(s, tg_id, "model", reply, flags=",".join(flags))
 
     await message.answer(reply, reply_markup=kb.live_chat_kb())
+    await support.relay_ai(message.bot, tg_id, reply)
 
-    # 3. Shifokor ko'rishi kerak bo'lgan holatlar
+    # 4. Manzil so'ralgan bo'lsa — xaritadagi nuqta. Shifokorning talabi:
+    #    manzil matn bilan tasvirlanmasin, bemor joylashuvni bosib ko'rsin.
+    if ai.asks_location(text):
+        await _send_clinic_location(message)
+
+    # 5. Shifokor ko'rishi kerak bo'lgan holatlar
     if "fallback" in flags:
         await _escalate(message, state, "⚠️ AI javob berolmadi", text)
+    elif ai.is_unclear(reply):
+        # AI bemorni tushunmadi — javob mijozga ketdi, endi odam ko'rsin.
+        await _escalate(message, state, "❓ Noaniq xabar — AI tushunmadi", text)
     else:
         await _report_once(message, state, text)
+
+
+async def _send_clinic_location(message: Message) -> None:
+    """Klinika joylashuvi: xarita nuqtasi va tagida bir og'iz izoh."""
+    async with session_scope() as s:
+        clinics = await repo.get_clinics(s)
+    for c in clinics:
+        if not (c.latitude and c.longitude):
+            continue
+        await message.answer_location(latitude=c.latitude, longitude=c.longitude)
+        note = f"📍 {c.name}, {c.address}"
+        if c.landmark:
+            note += f" ({c.landmark})"
+        await message.answer(note, reply_markup=kb.live_chat_kb())
+        break  # qabul bitta joyda — birinchi klinika yetarli
 
 
 async def _finish_live(message: Message, state: FSMContext, by_user: bool) -> None:
@@ -640,6 +748,83 @@ async def _escalate(message: Message, state: FSMContext, reason: str, text: str)
     )
     await notify_admins(message.bot, body)
     await report.send(body)
+    # Operator guruhida bu bemorning mavzusiga ham belgi qo'yiladi — admin
+    # aynan qaysi suhbatga kirishni bilishi uchun.
+    await support.notify(
+        message.bot, message.from_user.id, f"⚠️ <b>{escape(reason)}</b> — odam kerak."
+    )
+
+
+# ═══════════════════ Operator guruhi (jonli admin) ═══════════════════
+# Guruhda bot faqat o'z mavzularini kuzatadi. Admin mavzuga yozgan matn
+# to'g'ridan-to'g'ri bemorga ketadi va AI `HUMAN_PAUSE_MINUTES` ga jim
+# bo'ladi.
+#
+# ⚠️ BotFather'da bu bot uchun «Group Privacy» O'CHIRILGAN bo'lishi shart
+# (/setprivacy → Disable), aks holda bot guruhdagi oddiy matnni umuman
+# ko'rmaydi — faqat buyruqlarni ko'radi.
+_SUPPORT_CHAT = F.chat.id == SUPPORT_GROUP_ID
+
+
+async def _thread_user(topic_id: int | None) -> int | None:
+    if not topic_id:
+        return None
+    async with session_scope() as s:
+        th = await support.thread_by_topic(s, topic_id)
+    return th.tg_id if th else None
+
+
+@support_router.message(_SUPPORT_CHAT, Command("ai"))
+async def support_resume_ai(message: Message) -> None:
+    """AI ni darhol qaytaradi (pauzani kutmasdan)."""
+    tg_id = await _thread_user(message.message_thread_id)
+    if tg_id is None:
+        await message.reply("Bu mavzu bemorga bog'lanmagan.")
+        return
+    await support.set_mode(tg_id, "ai")
+    await message.reply("🤖 AI qaytdi — keyingi xabarga u javob beradi.")
+
+
+@support_router.message(_SUPPORT_CHAT, Command("odam", "stop"))
+async def support_hold_ai(message: Message) -> None:
+    """AI ni to'xtatib turadi — javobni faqat odam yozadi."""
+    tg_id = await _thread_user(message.message_thread_id)
+    if tg_id is None:
+        await message.reply("Bu mavzu bemorga bog'lanmagan.")
+        return
+    await support.set_mode(tg_id, "human")
+    await message.reply(
+        f"✋ AI to'xtatildi. {support.HUMAN_PAUSE_MINUTES} daqiqadan keyin "
+        f"o'zi qaytadi yoki /ai bosing."
+    )
+
+
+@support_router.message(_SUPPORT_CHAT, F.text | F.photo | F.voice | F.document)
+async def support_reply(message: Message) -> None:
+    """Admin mavzuga yozdi — xabar bemorga ketadi, AI pauzaga o'tadi."""
+    tg_id = await _thread_user(message.message_thread_id)
+    if tg_id is None:
+        return  # xizmat mavzusi yoki bog'lanmagan xabar — jim o'tamiz
+
+    try:
+        if message.text:
+            await message.bot.send_message(tg_id, message.text)
+        else:
+            await message.bot.copy_message(
+                chat_id=tg_id, from_chat_id=message.chat.id, message_id=message.message_id
+            )
+    except Exception as e:
+        log.warning("Bemorga (%s) yuborilmadi: %s", tg_id, e)
+        await message.reply(f"❌ Bemorga yetib bormadi: {e}")
+        return
+
+    # Odam yozgani AI ning xotirasiga `model` roli bilan tushadi — pauza
+    # tugagach AI aynan shu gaplarni o'qib, suhbatni shunga mos davom
+    # ettiradi va aytilganini takrorlamaydi.
+    body = message.text or f"[admin {message.content_type} yubordi]"
+    async with session_scope() as s:
+        await repo.add_chat_message(s, tg_id, "model", body, flags="human")
+    await support.set_mode(tg_id, "human")
 
 
 # ─────────────────────────── Admin ───────────────────────────
@@ -700,7 +885,19 @@ async def stats(message: Message) -> None:
 
 @router.message(Command("id"))
 async def whoami(message: Message) -> None:
-    await message.answer(f"Sizning Telegram ID: <code>{message.from_user.id}</code>")
+    """Shaxsiy ID va (guruhda ishlatilsa) guruh ID si.
+
+    Guruh ID si operator guruhini sozlash uchun kerak: uni `.env` dagi
+    `SUPPORT_GROUP_ID` ga yoziladi.
+    """
+    lines = [f"👤 Sizning Telegram ID: <code>{message.from_user.id}</code>"]
+    if message.chat.type in {"group", "supergroup"}:
+        lines.append(f"💬 Guruh ID: <code>{message.chat.id}</code>")
+        lines.append(
+            f"🧵 Mavzular (Topics): "
+            f"{'yoqilgan ✅' if message.chat.is_forum else 'yoqilmagan ❌'}"
+        )
+    await message.answer("\n".join(lines))
 
 
 # ─────────────────────────── Eskirgan tugmalar ───────────────────────────
@@ -721,6 +918,23 @@ async def stale_callback(cq: CallbackQuery, state: FSMContext) -> None:
 async def fallback(message: Message, state: FSMContext) -> None:
     if await state.get_state():
         return
+
+    # FSM xotirada saqlanadi (MemoryStorage), servis esa uxlab-uyg'onadi va
+    # qayta ishga tushadi — o'shanda `Live.chatting` yo'qoladi. Bemor uchun
+    # esa suhbat davom etayotgan bo'ladi. Bazada yakunlanmagan suhbat bo'lsa
+    # holatni tiklab, xabarni AI ga uzatamiz: bemor «Menyudan tanlang» degan
+    # javob olib chalkashmaydi va suhbat tarixi ham saqlanib qoladi.
+    if ASK_ENABLED:
+        async with session_scope() as s:
+            open_chat = await repo.has_open_chat(s, message.from_user.id)
+        if open_chat:
+            await state.set_state(Live.chatting)
+            await state.update_data(
+                started=datetime.utcnow().isoformat(), reported=True
+            )
+            await live_message(message, state)
+            return
+
     hint = (
         "Savolingiz bo'lsa — «💬 Jonli murojaat» tugmasini bosing, "
         "shifokorning admini bilan yozishasiz."

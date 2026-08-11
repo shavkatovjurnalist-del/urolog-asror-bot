@@ -6,6 +6,7 @@ funksiyalariga umuman tegilmaydi.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta
 from html import escape
 
@@ -14,7 +15,7 @@ from sqlalchemy import func, select
 
 from app.config import REPORT_BOT_TOKEN, REPORT_CHAT_IDS
 from app.db import SessionLocal
-from app.models import Appointment, Clinic, Consultation, Service, User
+from app.models import Appointment, ChatMessage, Clinic, Consultation, Service, User
 
 log = logging.getLogger(__name__)
 
@@ -230,14 +231,119 @@ async def daily_summary(days: int = 1) -> str:
     return text
 
 
+# ─────────────────── Telefon qoldirganlar ro'yxati ───────────────────
+# O'zbekiston operator kodlari. Kod ro'yxati kerak, chunki matndagi
+# «168 000 000» kabi katta summa ham to'qqiz xonali bo'lib chiqadi va
+# telefon raqami deb tushunilib qolardi.
+_UZ_CODES = {
+    "20", "33", "50", "55", "61", "62", "65", "66", "67", "69",
+    "70", "71", "72", "73", "74", "75", "76", "78",
+    "88", "90", "91", "93", "94", "95", "97", "98", "99",
+}
+_PHONE_CANDIDATE = re.compile(r"[+\d][\d\s\-()+]{7,20}\d")
+
+
+def find_phones(text: str) -> list[str]:
+    """Matndagi telefon raqamlari (bemor suhbatda yozib qoldirgan bo'lishi mumkin)."""
+    out: list[str] = []
+    for m in _PHONE_CANDIDATE.finditer(text or ""):
+        digits = re.sub(r"\D", "", m.group(0))
+        if digits.startswith("998"):
+            digits = digits[3:]
+        if len(digits) == 9 and digits[:2] in _UZ_CODES:
+            num = f"+998 {digits[:2]} {digits[2:5]} {digits[5:7]} {digits[7:]}"
+            if num not in out:
+                out.append(num)
+    return out
+
+
+async def daily_contacts(days: int = 1) -> str:
+    """Bugun raqam qoldirgan mijozlar — shifokorning talabi bo'yicha 22:00 da.
+
+    Ikki manba: rasmiy arizalar va jonli suhbatda «kelaman» deb raqamini
+    yozib qoldirganlar. Ikkinchisi arizaga aylanmaydi, lekin shifokor uchun
+    aynan shular qimmatli — ular hech qayerda hisobga olinmasdi.
+    """
+    since = datetime.utcnow() - timedelta(days=days)
+
+    async with SessionLocal() as s:
+        appts = list((await s.execute(
+            select(Appointment).where(Appointment.created_at >= since)
+            .order_by(Appointment.created_at)
+        )).scalars())
+        msgs = list((await s.execute(
+            select(ChatMessage)
+            .where(ChatMessage.created_at >= since, ChatMessage.role == "user")
+            .order_by(ChatMessage.created_at)
+        )).scalars())
+        users = {
+            u.tg_id: u for u in (await s.execute(select(User))).scalars() if u.tg_id
+        }
+
+    appt_phones = {re.sub(r"\D", "", a.phone or "")[-9:] for a in appts}
+
+    # Suhbatda raqam yozganlar — arizada bori takrorlanmaydi.
+    from_chat: dict[str, list[str]] = {}
+    for m in msgs:
+        for phone in find_phones(m.text):
+            if re.sub(r"\D", "", phone)[-9:] in appt_phones:
+                continue
+            u = users.get(m.tg_id)
+            who = " ".join(
+                x for x in ((u.first_name if u else ""), (u.last_name if u else "")) if x
+            ).strip()
+            if u and u.username:
+                who = f"{who} (@{u.username})".strip()
+            from_chat.setdefault(phone, [])
+            label = who or f"id{m.tg_id}"
+            if label not in from_chat[phone]:
+                from_chat[phone].append(label)
+
+    now = datetime.utcnow()
+    lines = [
+        "📞 <b>BUGUN RAQAM QOLDIRGANLAR</b>",
+        f"🗓 {fmt_date(now)}",
+        "━━━━━━━━━━━━━━━━━━━━",
+    ]
+
+    if appts:
+        lines.append(f"\n📅 <b>Ariza qoldirganlar — {len(appts)} ta</b>")
+        for a in appts:
+            lines.append(
+                f"\n<b>{escape(a.full_name)}</b>\n"
+                f"   📱 <code>{escape(a.phone)}</code>\n"
+                f"   🕐 {escape(a.preferred_time or 'vaqt ko‘rsatilmagan')}"
+            )
+
+    if from_chat:
+        lines.append(f"\n\n💬 <b>Suhbatda raqam yozganlar — {len(from_chat)} ta</b>")
+        lines.append("<i>Bular ariza qoldirmagan — o'zingiz bog'lanishingiz kerak.</i>")
+        for phone, whos in from_chat.items():
+            lines.append(f"\n<b>{escape(', '.join(whos))}</b>\n   📱 <code>{phone}</code>")
+
+    if not appts and not from_chat:
+        lines.append("\nBugun hech kim raqam qoldirmadi.")
+
+    text = "\n".join(lines)
+    for chunk in [text[i:i + 3900] for i in range(0, len(text), 3900)]:
+        await send(chunk)
+    return text
+
+
 # ─────────────────────────── Kunlik jadval ───────────────────────────
-DAILY_HOUR_LOCAL = 20  # Toshkent vaqti bilan 20:00
+# (Toshkent vaqti bilan soat, vazifa nomi, funksiya)
+DAILY_JOBS: list[tuple[int, str, object]] = [
+    (20, "kunlik xulosa", lambda: daily_summary()),
+    (22, "raqam qoldirganlar", lambda: daily_contacts()),
+]
+
+DAILY_HOUR_LOCAL = 20  # eski nom — tashqi skriptlar ishlatishi mumkin
 
 
 async def daily_scheduler() -> None:
-    """Har kuni belgilangan soatda xulosani yuboradi.
+    """Belgilangan soatlarda kunlik xabarlarni yuboradi.
 
-    Servis uyquda bo'lsa o'sha kun o'tkazib yuboriladi — shuning uchun
+    Servis uyquda bo'lsa o'sha vazifa o'tkazib yuboriladi — shuning uchun
     `/health` ni tashqi cron bilan uyg'oq tutish tavsiya etiladi.
     """
     import asyncio
@@ -246,11 +352,20 @@ async def daily_scheduler() -> None:
 
     while True:
         now = datetime.utcnow() + TZ_OFFSET
-        target = now.replace(hour=DAILY_HOUR_LOCAL, minute=0, second=0, microsecond=0)
-        if target <= now:
-            target += timedelta(days=1)
+        # Eng yaqin vazifani tanlaymiz.
+        best: tuple[datetime, str, object] | None = None
+        for hour, name, job in DAILY_JOBS:
+            target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+            if target <= now:
+                target += timedelta(days=1)
+            if best is None or target < best[0]:
+                best = (target, name, job)
+
+        target, name, job = best  # type: ignore[misc]
         await asyncio.sleep((target - now).total_seconds())
         try:
-            await daily_summary()
+            await job()  # type: ignore[operator]
         except Exception as e:
-            log.warning("Kunlik xulosa yuborilmadi: %s", e)
+            log.warning("«%s» yuborilmadi: %s", name, e)
+        # Bir daqiqa kutamiz, aks holda o'sha soat ichida qayta ishga tushadi.
+        await asyncio.sleep(61)

@@ -25,6 +25,23 @@ REPORT_CHAT_IDS: list[int] = _ids(os.getenv("REPORT_CHAT_IDS", ""))
 # «Murojaat» bo'limi. AI agent ulanmaguncha o'chirib turiladi.
 ASK_ENABLED: bool = os.getenv("ASK_ENABLED", "false").lower() == "true"
 
+# ── Jonli operator guruhi ──────────────────────────────────────────────
+# Har bemorning suhbati shu guruhda alohida mavzuda (topic) jonli ko'chib
+# boradi; admin o'sha mavzuga yozsa javob bemorga ketadi.
+#
+# Sozlash: guruh oching → Sozlamalar → «Mavzular» (Topics) yoqing →
+# botni admin qiling («Mavzularni boshqarish» huquqi bilan) → guruhda
+# `/id` yozing va chiqqan raqamni shu yerga qo'ying.
+#
+# Bo'sh qoldirilsa guruh butunlay o'chiq bo'ladi va bot avvalgidek ishlaydi
+# — hech narsa buzilmaydi.
+SUPPORT_GROUP_ID: int = int(os.getenv("SUPPORT_GROUP_ID", "0") or 0)
+
+# Odam suhbatga aralashgach AI qancha vaqt jim turadi (daqiqa).
+# Shifokorning qarori: bir soat. Undan keyin AI odam yozganlarni o'qib,
+# suhbatni shunga mos davom ettiradi.
+HUMAN_PAUSE_MINUTES: int = int(os.getenv("HUMAN_PAUSE_MINUTES", "60"))
+
 BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "secret")
 WEBHOOK_PATH: str = f"/webhook/{WEBHOOK_SECRET}"
