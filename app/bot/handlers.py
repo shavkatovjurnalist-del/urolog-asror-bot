@@ -804,7 +804,16 @@ async def support_reply(message: Message) -> None:
     """Admin mavzuga yozdi — xabar bemorga ketadi, AI pauzaga o'tadi."""
     tg_id = await _thread_user(message.message_thread_id)
     if tg_id is None:
-        return  # xizmat mavzusi yoki bog'lanmagan xabar — jim o'tamiz
+        # Mavzular yoqilmagan bo'lsa xabar qaysi bemorga tegishli ekani
+        # noma'lum bo'ladi va admin javobi jimgina yo'qolib ketardi —
+        # admin buni sezmasdi. Shuning uchun aniq aytamiz.
+        if not message.chat.is_forum:
+            await message.reply(
+                "⚠️ Guruhda «Mavzular» (Topics) yoqilmagan — bu xabar bemorga "
+                "yetib bormadi.\n\nGuruh sozlamalari → «Mavzular» ni yoqing, "
+                "so'ng botga «Mavzularni boshqarish» huquqini bering."
+            )
+        return  # xizmat mavzusi yoki bog'lanmagan xabar
 
     try:
         if message.text:
