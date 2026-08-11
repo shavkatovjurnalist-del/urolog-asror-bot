@@ -23,7 +23,7 @@ import httpx
 from app import repo, persona
 from app.config import AI_API_KEY, AI_ENABLED, AI_MODEL
 from app.db import SessionLocal
-from app.knowledge import PHONE, knowledge_text
+from app.knowledge import knowledge_text
 
 log = logging.getLogger(__name__)
 
@@ -91,10 +91,9 @@ async def build_context(force: bool = False) -> str:
 
 # ─────────────────────────── Javobni tozalash ───────────────────────────
 # Model qoidani buzsa — mijozga ketishidan oldin to'xtatiladi.
-_PRICE_RE = re.compile(
-    r"(\d[\d\s.,]{2,})\s*(so'm|som|sum|ming|mln|million|\$|dollar|usd)",
-    re.IGNORECASE,
-)
+# Narx filtri OLIB TASHLANDI (2026-08-11): shifokor narxlarni aytishga ruxsat
+# berdi, ular endi `knowledge.PRICE_FACTS` da. Filtr faqat eski klinika nomini
+# to'sadi.
 _MEDFAST_RE = re.compile(r"med\s*fast|ozod\s*sharq", re.IGNORECASE)
 
 
@@ -126,8 +125,10 @@ def is_urgent(text: str) -> bool:
     return bool(_URGENT_RE.search(text or ""))
 
 
-# Anketa: «Qaysi savollarda AI albatta suhbatni sizga uzatishi kerak? — narx
-# so'ralsa». Model to'g'ri javob bergan taqdirda ham shifokor xabardor bo'ladi.
+# Bemor narx so'radimi. AI endi narxni o'zi aytadi (2026-08-11 dan), shuning
+# uchun bu darhol shifokorga uzatilmaydi — faqat `chat_messages.flags` ga
+# `narx` deb belgilanadi. Suhbat yakunlanganda yozuv baribir shifokorga ketadi,
+# ya'ni kim narx so'raganini keyin ham ko'rish mumkin.
 _PRICE_ASK_RE = re.compile(
     r"narx|nark|qancha turadi|qancha bo'?ladi|necha pul|qanchadan|puli qancha|"
     r"\bqimmat|arzon|цена|стоит|стоимость|сколько сто",
@@ -174,13 +175,7 @@ def guard(text: str) -> tuple[str, list[str]]:
     hits: list[str] = []
     text = _clean(text)
 
-    if _PRICE_RE.search(text):
-        hits.append("narx")
-        text = (
-            "Narxni ko'rikdan keyin shifokorning o'zi aytadi — har bir holat "
-            f"boshqacha bo'ladi. Aniqlashtirish uchun {PHONE} raqamiga qo'ng'iroq qiling."
-        )
-    elif _MEDFAST_RE.search(text):
+    if _MEDFAST_RE.search(text):
         hits.append("eski_klinika")
         text = _MEDFAST_RE.sub("Sintez Lab", text)
 

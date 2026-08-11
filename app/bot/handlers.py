@@ -577,15 +577,16 @@ async def live_message(message: Message, state: FSMContext) -> None:
         reply = persona.FALLBACK
         flags = flags + ["fallback"]
 
+    if ai.asks_price(text):
+        flags = flags + ["narx"]
+
     async with session_scope() as s:
         await repo.add_chat_message(s, tg_id, "model", reply, flags=",".join(flags))
 
     await message.answer(reply, reply_markup=kb.live_chat_kb())
 
     # 3. Shifokor ko'rishi kerak bo'lgan holatlar
-    if ai.asks_price(text) or "narx" in flags:
-        await _escalate(message, state, "Narx so'raldi", text)
-    elif "fallback" in flags:
+    if "fallback" in flags:
         await _escalate(message, state, "⚠️ AI javob berolmadi", text)
     else:
         await _report_once(message, state, text)

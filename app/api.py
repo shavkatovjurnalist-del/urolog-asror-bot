@@ -299,6 +299,8 @@ async def chat_send(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> 
     if not reply:
         log.warning("AI javob bermadi (webapp %s): %s", tg_user.id, ",".join(flags))
         reply, flags = persona.FALLBACK, flags + ["fallback"]
+    if ai.asks_price(text):
+        flags = flags + ["narx"]
 
     await repo.add_chat_message(
         s, tg_user.id, "model", reply, source="webapp", flags=",".join(flags)
@@ -313,11 +315,9 @@ async def chat_send(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> 
         )
         await report.new_consultation(c, username)
 
-    price_asked = ai.asks_price(text) or "narx" in flags
-    if price_asked or "fallback" in flags:
-        reason = "Narx so'raldi" if price_asked else "⚠️ AI javob berolmadi"
+    if "fallback" in flags:
         alert = (
-            f"🔔 <b>Jonli suhbat — {reason}</b> (Mini App)\n\n"
+            f"🔔 <b>Jonli suhbat — ⚠️ AI javob berolmadi</b> (Mini App)\n\n"
             f"👤 {escape(username)} · <code>{tg_user.id}</code>\n💬 {escape(text[:600])}"
         )
         await notify_admins(bot, alert)

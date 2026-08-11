@@ -7,12 +7,11 @@ Ikkinchi manba — bazadagi kontent (xizmatlar, usullar, FAQ, klinika, shifokor
 profili). U `app/ai.py: build_context()` da shu matnga qo'shiladi. Ya'ni AI
 ikkita bazadan oziqlanadi: umumiy kontent + anketaning aniqlashtiruvchi javoblari.
 
-⚠️ NARXLAR BU YERDA YO'Q — ATAYLAB.
-Shifokor anketada aniq tanladi: «AI narxni to'g'ridan-to'g'ri aytmasin, faqat
-"ko'rikdan keyin aniqlanadi" desin» va «narx so'ralsa — suhbatni odamga uzat».
-Narx modelga umuman berilmasa, u adashib ham ayta olmaydi.
-Anketadagi narxlar bu repoda saqlanmaydi (repo GitHub'da ochiq) — ular
-Obsidian'da: `AI_brain/urolog-bot-narxlar.md`.
+NARXLAR HAQIDA
+Anketada «AI narxni aytmasin» degan javob bor edi, lekin Bobur 2026-08-11 da
+buni xato deb tuzatdi: **AI barcha narxlarni ayta oladi**. Narxlar quyidagi
+`PRICE_FACTS` bo'limida. Yagona qoida — bu narxlar boshlang'ich, aniq summa
+holatga qarab ko'rikdan keyin belgilanadi; AI shuni eslatib qo'yadi.
 """
 from __future__ import annotations
 
@@ -210,10 +209,75 @@ mumkin, yoki qabulga kelib shifokorning kompyuteridan ko'rsa bo'ladi.
 """.strip()
 
 # ─────────────────────────────────────────────────────────────────────
+#  6. Narxlar
+#     Anketadan. Bemor so'rasa AI aynan shu raqamlarni aytadi.
+#     Bu yerda yo'q narxni O'YLAB TOPMAYDI — «aniq narxni shifokor aytadi» deydi.
+# ─────────────────────────────────────────────────────────────────────
+PRICE_FACTS = """
+NARXLAR
+Quyidagi narxlarni bemorga bemalol aytish mumkin. Aytishdan oldin yoki keyin
+bir og'iz eslatib qo'y: aniq summa holatga qarab ko'rikdan keyin belgilanadi.
+Ro'yxatda yo'q narxni o'ylab topma — «buni shifokorning o'zi aytadi» de.
+
+Konsultatsiya:
+- birlamchi konsultatsiya — 200 000 so'm (suhbat, 10-15 daqiqa)
+- takroriy konsultatsiya — 100 000 so'm (15 kun ichida)
+- operatsiyadan keyingi nazorat ko'rigi — 1 marta bepul
+- analiz javobini rasmdan ko'rib izohlash — bepul
+- onlayn konsultatsiya — yo'q
+
+Analizlar va tekshiruvlar:
+- spermogramma — 105 000 so'mdan boshlanadi
+- PSA umumiy — 300 000 so'm; PSA erkin — 300 000 so'm
+- gormon tahlillari — har biri taxminan 110 000 so'm
+- siydik umumiy tahlili — 55 000 so'm
+- qon umumiy tahlili — taxminan 70 000 so'm
+- qon biokimyosi — turiga qarab har xil
+- jinsiy infeksiyalar paketi (PCR) — 800 000 so'm
+- buyrak va siydik pufagi UZI — 100 000 so'm
+- moyak (skrotal) UZI + doppler — 100 000 so'm
+- TRUZI — 100 000 so'm
+- jinsiy olat doppleri — 100 000 so'm
+
+Erkaklar salomatligi operatsiyalari:
+- penil protez — 29 mln so'mdan 168 mln so'mgacha
+  (1 komponentli 29 mln, 3 komponentli 168 mln)
+- varikotsele (Marmar) — bir tomon 3 mln, ikki tomon 5 mln so'm
+- gidrotsele — 3,5 mln so'm
+- moyak ortig'i kistasi / spermatosele — 2-3 mln so'm
+- TESE / Micro-TESE — taxminan 15 mln so'm
+- denervatsiya (tez bo'shanish) — 8 mln so'm
+- ligamentotomiya (uzunlikni oshirish) — 11 mln so'm
+- sunnat (xatna) — 1,5 mln so'm
+- fimoz / parafimoz — 5 mln so'm
+- Peyroni (egrilikni to'g'rilash) — 1000-4000 dollar atrofida
+- papilloma kuydirish — 200 dollardan boshlanadi
+- frenulotomiya / frenuloplastika — narxi kelishiladi
+
+Buyrak, prostata, pufak operatsiyalari:
+- HoLEP / MoLEP — 13-16 mln so'm
+- TUR (prostata) — 9-10 mln so'm
+- prostatektomiya — 30-80 mln so'm
+- PCNL — 7-15 mln so'm
+- URS / RIRS — 7-15 mln so'm
+- buyrak operatsiyalari (rezeksiya, nefrektomiya, kista) — 10-30 mln so'm
+- siydik pufagi operatsiyalari — 10-15 mln so'm
+- uretra plastikasi — 20-30 mln so'm
+- TVT / TOT (ayollarda siydik tutolmaslik) — 8-12 mln so'm
+- bolalar operatsiyalari — 5 mln so'm
+- shoshilinch operatsiyalar — 10-15 mln so'm
+- ESWL (masofaviy litotripsiya) — bizda yo'q
+
+Operatsiya narxiga operatsiyaning o'zi va unda ishlatiladigan buyumlar kiradi.
+Qo'shimcha xarajat bo'lishi mumkin bo'lgan yagona narsa — analizlar.
+Chegirma va imtiyoz toifalari yo'q.
+""".strip()
+
+# ─────────────────────────────────────────────────────────────────────
 #  Yig'ilgan bilim bazasi
 # ─────────────────────────────────────────────────────────────────────
 KNOWLEDGE = "\n\n".join(
-    [DOCTOR_FACTS, BOOKING_FACTS, LAB_FACTS, SURGERY_FACTS, PATIENT_FACTS]
+    [DOCTOR_FACTS, BOOKING_FACTS, LAB_FACTS, SURGERY_FACTS, PATIENT_FACTS, PRICE_FACTS]
 )
 
 
