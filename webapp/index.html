@@ -112,19 +112,11 @@
       <div class="list" id="clinics"></div>
     </section>
 
-    <!-- ══════════ MUROJAAT (AI joyi) ══════════ -->
+    <!-- ══════════ JONLI MUROJAAT (AI suhbati) ══════════ -->
     <section class="page" id="page-ask" hidden>
       <div class="page-head">
-        <h1>Murojaat</h1>
-        <p id="ask-sub">Savolingizni yozing — shifokor javob beradi.</p>
-      </div>
-
-      <div class="ai-banner">
-        <div class="ai-icon">🤖</div>
-        <div>
-          <b>AI-konsultant tez orada</b>
-          <span>Yaqin kunlarda savolingizga bir zumda dastlabki javob beriladi.</span>
-        </div>
+        <h1>Jonli murojaat</h1>
+        <p id="ask-sub">Shifokorning admini bilan yozishing — savolingizga darhol javob oling.</p>
       </div>
 
       <!-- AI ulanmaguncha ko'rinadigan holat -->
@@ -139,18 +131,30 @@
         </div>
       </div>
 
-      <form class="card form" id="ask-form">
-        <label class="fl">Savolingiz yoki shikoyatingiz</label>
-        <textarea id="ask-text" rows="6" placeholder="Masalan: 45 yoshdaman, tunda tez-tez siyish bezovta qilyapti…"></textarea>
-        <button type="submit" class="btn-primary">Yuborish</button>
-        <p class="hint">Javob shu bot orqali keladi.</p>
-      </form>
+      <!-- Suhbat boshlanmagan holat -->
+      <div class="card soon" id="chat-intro" hidden>
+        <div class="soon-icon">💬</div>
+        <b>Suhbatni boshlaymizmi?</b>
+        <p>Asror Abbosovichning admini savolingizga javob beradi: qabul vaqti,
+           manzil, tayyorgarlik va operatsiyalar haqida.</p>
+        <div class="soon-actions">
+          <button class="btn-primary" id="chat-start">Suhbatni boshlash</button>
+        </div>
+      </div>
 
-      <div class="ok-box" id="ask-ok" hidden>
-        <div class="ok-icon">✅</div>
-        <b>Murojaatingiz qabul qilindi</b>
-        <p>Shifokor yoki uning yordamchisi tez orada siz bilan bog'lanadi.</p>
-        <button class="btn-ghost" id="ask-again">Yana savol berish</button>
+      <!-- Suhbat oynasi -->
+      <div id="chat-box" hidden>
+        <div class="chat-log" id="chat-log"></div>
+        <form class="chat-input" id="chat-form">
+          <input id="chat-text" type="text" autocomplete="off"
+                 placeholder="Savolingizni yozing…" />
+          <button type="submit" id="chat-send" aria-label="Yuborish">➤</button>
+        </form>
+        <p class="hint">
+          Bu shifokorning admini — tashxis qo'ymaydi va dori buyurmaydi.
+          Shoshilinch holatda darhol qo'ng'iroq qiling.
+        </p>
+        <button class="btn-ghost" id="chat-end">Suhbatni yakunlash</button>
       </div>
     </section>
 
@@ -180,7 +184,7 @@
 
         <label class="fl">Qabul soati *</label>
         <div class="slots" id="b-slots"></div>
-        <p class="fh">Ish vaqti 09:00 – 19:00 · 12:00 – 13:00 tushlik.</p>
+        <p class="fh" id="b-slot-hint"></p>
 
         <label class="fl">Qo'shimcha izoh</label>
         <textarea id="b-comment" rows="3" placeholder="Ixtiyoriy"></textarea>

@@ -167,6 +167,26 @@ class Appointment(Base):
     service: Mapped[Service | None] = relationship()
 
 
+class ChatMessage(Base):
+    """«Jonli murojaat» suhbati — AI ning xotirasi.
+
+    Har xabar (bemorniki ham, AI niki ham) shu yerga yoziladi. Keyingi javobda
+    oxirgi bir nechtasi modelga kontekst sifatida beriladi. Suhbat botda ham,
+    Mini App'da ham bitta `tg_id` bo'yicha davom etadi.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    role: Mapped[str] = mapped_column(String(10))  # user | model
+    text: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(20), default="bot")  # bot | webapp
+    # Qoidalar ishga tushgan bo'lsa shu yerda: narx, eski_klinika, shoshilinch…
+    flags: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
 class Consultation(Base):
     """Murojaatlar / savollar.
 

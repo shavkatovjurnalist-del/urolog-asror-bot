@@ -24,8 +24,11 @@ BTN_RESULTS = "🎬 Natijalar"
 BTN_DOCTOR = "👨‍⚕️ Shifokor haqida"
 BTN_FAQ = "❓ Savol-javob"
 BTN_BOOK = "📅 Qabulga yozilish"
-BTN_ASK = "💬 Murojaat / Savol"
+BTN_LIVE = "💬 Jonli murojaat"
+BTN_ASK = "💬 Murojaat / Savol"  # eski tugma — foydalanuvchi qurilmasida qolgan bo'lishi mumkin
 BTN_CONTACT = "📞 Aloqa"
+
+BTN_END_CHAT = "✅ Suhbatni yakunlash"
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -38,13 +41,25 @@ def main_menu() -> ReplyKeyboardMarkup:
             [KeyboardButton(text=BTN_SERVICES), KeyboardButton(text=BTN_METHODS)],
             [KeyboardButton(text=BTN_CLINICS), KeyboardButton(text=BTN_RESULTS)],
             [KeyboardButton(text=BTN_DOCTOR), KeyboardButton(text=BTN_FAQ)],
-            # «Murojaat» AI agent ulangach ochiladi (ASK_ENABLED=true)
-            [KeyboardButton(text=BTN_BOOK), KeyboardButton(text=BTN_ASK)]
+            # «Jonli murojaat» — AI bilan suhbat (ASK_ENABLED=true bo'lganda)
+            [KeyboardButton(text=BTN_BOOK), KeyboardButton(text=BTN_LIVE)]
             if ASK_ENABLED else [KeyboardButton(text=BTN_BOOK)],
             [KeyboardButton(text=BTN_CONTACT)],
         ],
         resize_keyboard=True,
         input_field_placeholder="Menyudan tanlang yoki savolingizni yozing…",
+    )
+
+
+def live_chat_kb() -> ReplyKeyboardMarkup:
+    """Suhbat davomidagi klaviatura — boshqa bo'limlar chalg'itmasligi uchun qisqa."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=BTN_END_CHAT)],
+            [KeyboardButton(text=BTN_BOOK)],
+        ],
+        resize_keyboard=True,
+        input_field_placeholder="Savolingizni yozing…",
     )
 
 

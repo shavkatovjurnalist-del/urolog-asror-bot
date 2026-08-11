@@ -86,7 +86,7 @@ def pick_time(day_text: str) -> str:
     return (
         f"📅 <b>{escape(day_text)}</b>\n\n"
         f"🕐 Endi qulay soatni tanlang.\n"
-        f"<i>Ish vaqti 09:00 – 19:00, 12:00 – 13:00 tushlik.</i>"
+        f"<i>Qabul 09:00 – 16:00, 13:00 – 14:00 tushlik.</i>"
     )
 
 
@@ -162,18 +162,11 @@ DISCLAIMER = (
 )
 
 ASK_DISABLED = (
-    "🤖 <b>AI-konsultant tayyorlanmoqda</b>\n\n"
-    "Bu bo'lim tez orada ishga tushadi — sun'iy intellekt savolingizga bir zumda "
+    "🤖 <b>Jonli murojaat tayyorlanmoqda</b>\n\n"
+    "Bu bo'lim tez orada ishga tushadi — shifokorning admini savolingizga bir zumda "
     "javob beradi.\n\n"
     "Hozircha:\n"
     "• 📅 «Qabulga yozilish» orqali ariza qoldiring;\n"
     "• 📞 +998 90 008 38 78 raqamiga qo'ng'iroq qiling;\n"
     "• ✈️ yoki shifokorga Telegram orqali yozing."
-)
-
-ASK_PLACEHOLDER = (
-    "✅ Murojaatingiz qabul qilindi va shifokorga yuborildi.\n\n"
-    "🤖 Tez orada bu bo'limga <b>AI-konsultant</b> ulanadi — u savolingizga bir zumda "
-    "dastlabki javob beradi. Hozircha shifokor yoki uning yordamchisi siz bilan bog'lanadi.\n\n"
-    "Shoshilinch holatlarda: 📞 +998 90 008 38 78"
 )

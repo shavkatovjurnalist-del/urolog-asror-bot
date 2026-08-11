@@ -3,7 +3,9 @@
 Qoidalar:
   • faqat ertangi kundan boshlab (bugun va o'tgan kunlar yopiq);
   • shanba va yakshanba — dam olish, tanlab bo'lmaydi;
-  • soat 09:00 – 19:00, 12:00 – 13:00 tushlik (yopiq).
+  • soat 09:00 – 16:00, 13:00 – 14:00 tushlik (yopiq).
+
+Vaqtlar shifokor anketasidan (2026-08-11). Oxirgi qabul 15:00 da boshlanadi.
 """
 from __future__ import annotations
 
@@ -21,9 +23,8 @@ MONTHS_GEN = ["yanvar", "fevral", "mart", "aprel", "may", "iyun",
 WEEK_SHORT = ["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"]
 WEEK_FULL = ["Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba", "Yakshanba"]
 
-# Ish soatlari — tushlik (12:00-13:00) chiqarib tashlangan
-TIME_SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00",
-              "15:00", "16:00", "17:00", "18:00"]
+# Ish soatlari — tushlik (13:00-14:00) chiqarib tashlangan
+TIME_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00"]
 
 MAX_DAYS_AHEAD = 60
 WEEKEND = {5, 6}  # shanba, yakshanba

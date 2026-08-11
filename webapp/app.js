@@ -87,10 +87,10 @@
   function render(d) {
     const doc = d.doctor;
 
-    // «Murojaat» bo'limi AI ulangunga qadar yopiq
+    // «Jonli murojaat» AI ulangunga qadar yopiq
     const askOn = d.flags?.ask_enabled;
-    $('#ask-form').hidden = !askOn;
     $('#ask-soon').hidden = !!askOn;
+    $('#chat-intro').hidden = !askOn;
     if (!askOn) {
       $('#ask-sub').textContent = 'AI-konsultant tayyorlanmoqda — tez orada ishga tushadi.';
     }
@@ -103,9 +103,15 @@
     $('#doc-exp').textContent = '🕐 Tajriba ' + doc.experience;
     $('#doc-bio').textContent = doc.bio;
     $('#doc-hours').textContent = '🗓 Qabul kunlari: ' + doc.work_hours;
-    // Onlayn yozilish jadvali shifokorning umumiy ish vaqtidan farq qilishi mumkin
-    $('#book-hours').textContent =
-      'Onlayn yozilish: Dushanba–Juma, 09:00 – 19:00 · 12:00 – 13:00 tushlik.';
+    // Jadval API'dan olinadi — matn hech qachon eskirmasin
+    const slots = d.schedule?.slots || [];
+    if (slots.length) {
+      const span = `${slots[0]} – ${slots[slots.length - 1]}`;
+      $('#book-hours').textContent =
+        `Onlayn yozilish: Dushanba–Juma, ${span} · ${d.schedule.lunch} tushlik.`;
+      $('#b-slot-hint').textContent =
+        `Qabul ${span} · ${d.schedule.lunch} tushlik.`;
+    }
 
     // Aloqa
     $('#doc-phone').textContent = doc.phone;
@@ -393,42 +399,74 @@
       showPage('home');
     });
 
-    // Murojaat (AI joyi)
-    $('#ask-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const ta = $('#ask-text');
-      if (ta.value.trim().length < 5) {
-        ta.classList.add('err');
-        notify('error');
-        toast('Savolingizni batafsilroq yozing');
-        return;
-      }
-      ta.classList.remove('err');
-      const btn = e.target.querySelector('button[type=submit]');
-      btn.disabled = true;
-      btn.textContent = 'Yuborilmoqda…';
-      try {
-        const r = await api('/api/consultations', { message: ta.value.trim() });
-        notify('success');
-        $('#ask-form').hidden = true;
-        $('#ask-ok').hidden = false;
-        if (r.answer) {
-          $('#ask-ok').querySelector('p').textContent = r.answer;
-        }
-      } catch (err) {
-        notify('error');
-        toast(err.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Yuborish';
-      }
-    });
+    // ─────────── Jonli murojaat (AI suhbati) ───────────
+    $('#chat-start').addEventListener('click', startChat);
+    $('#chat-end').addEventListener('click', endChat);
+    $('#chat-form').addEventListener('submit', sendChat);
+  }
 
-    $('#ask-again').addEventListener('click', () => {
-      $('#ask-text').value = '';
-      $('#ask-form').hidden = false;
-      $('#ask-ok').hidden = true;
-    });
+  // ─────────── Jonli suhbat ───────────
+  function bubble(role, text) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + (role === 'user' ? 'me' : 'op');
+    div.textContent = text;
+    $('#chat-log').appendChild(div);
+    $('#chat-log').scrollTop = $('#chat-log').scrollHeight;
+    return div;
+  }
+
+  async function startChat() {
+    haptic('light');
+    $('#chat-intro').hidden = true;
+    $('#chat-box').hidden = false;
+    $('#chat-log').innerHTML = '';
+    const typing = bubble('op', '…');
+    try {
+      const r = await api('/api/chat/start', {});
+      typing.textContent = r.greeting;
+      $('#chat-text').focus();
+    } catch (err) {
+      typing.remove();
+      toast(err.message);
+      $('#chat-intro').hidden = false;
+      $('#chat-box').hidden = true;
+    }
+  }
+
+  async function sendChat(e) {
+    e.preventDefault();
+    const input = $('#chat-text');
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    bubble('user', text);
+    const typing = bubble('op', '…');
+    typing.classList.add('typing');
+    $('#chat-send').disabled = true;
+
+    try {
+      const r = await api('/api/chat', { message: text });
+      typing.classList.remove('typing');
+      typing.textContent = r.reply;
+    } catch (err) {
+      typing.classList.remove('typing');
+      typing.textContent =
+        'Javob kelmadi. Internetni tekshiring yoki +998 90 008 38 78 raqamiga qo\'ng\'iroq qiling.';
+      notify('error');
+    } finally {
+      $('#chat-send').disabled = false;
+      input.focus();
+      $('#chat-log').scrollTop = $('#chat-log').scrollHeight;
+    }
+  }
+
+  async function endChat() {
+    try { await api('/api/chat/end', {}); } catch (_) {}
+    $('#chat-box').hidden = true;
+    $('#chat-intro').hidden = false;
+    $('#chat-log').innerHTML = '';
+    toast('Suhbat yakunlandi');
   }
 
   // ─────────── Start ───────────

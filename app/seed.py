@@ -7,10 +7,19 @@ from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db import SessionLocal, init_db
-from app.models import Advantage, Clinic, Doctor, Faq, Method, Result, Service
+from app.models import (
+    Advantage,
+    Appointment,
+    Clinic,
+    Doctor,
+    Faq,
+    Method,
+    Result,
+    Service,
+)
 
 DOCTOR = dict(
     full_name="To'rayev Asror Abbosovich",
@@ -33,7 +42,9 @@ DOCTOR = dict(
     instagram="https://www.instagram.com/urolog_asrorturayev/",
     youtube="https://youtube.com/@samarqand_urolog",
     website="https://urologasrorturayev.uz",
-    work_hours="Dushanbadan Shanbagacha, 09:00 – 19:00",
+    # Anketa (2026-08-11): dushanba–juma, 09:00–16:00, tushlik 13:00–14:00.
+    # Saytdagi «Dushanbadan Shanbagacha, 09:00–19:00» eskirgan.
+    work_hours="Dushanbadan Jumagacha, 09:00 – 16:00",
 )
 
 SERVICES = [
@@ -226,6 +237,8 @@ ADVANTAGES = [
          description="Operatsiyadan oldin va keyin to'liq maslahat va kuzatuv. Telegram orqali doim aloqadaman."),
 ]
 
+# Qabul FAQAT Sintez Lab'da. «Med Fast Clinic» 2026-08-11 da olib tashlandi
+# (shifokor qarori) — eski yozuvni bazadan tozalash `_drop_clinics` da.
 CLINICS = [
     dict(
         name="Sintez Lab Klinikasi",
@@ -235,20 +248,13 @@ CLINICS = [
         # Yandex qisqa havolasidan olingan aniq koordinata
         latitude=39.661389, longitude=66.945694,
         photo="/app/assets/clinic3.webp",
-        work_hours="Dush–Shan, 09:00 – 19:00",
-    ),
-    dict(
-        name="Med Fast Clinic",
-        address="Samarqand shahar, Ozod Sharq ko'chasi, 8-uy",
-        landmark="",
-        map_url="https://yandex.uz/maps/?text=Samarqand+Ozod+Sharq+ko'chasi+8",
-        # Aniq koordinata hali yo'q — shifokordan olingach shu yerga yoziladi.
-        # Bo'sh bo'lsa bot geolokatsiya yubormaydi, faqat xarita havolasi beriladi.
-        latitude=None, longitude=None,
-        photo="/app/assets/clinic4.webp",
-        work_hours="Dush–Shan, 09:00 – 19:00",
+        work_hours="Dush–Ju, 09:00 – 16:00",
     ),
 ]
+
+# Ro'yxatdan chiqarilgan klinikalar — har startda bazadan o'chiriladi.
+# Clinic'ga appointments FK bilan bog'langani uchun oddiy `prune` ishlatilmaydi.
+RETIRED_CLINICS = ["Med Fast Clinic"]
 
 # Videolar @samarqand_urolog kanalidan olingan (saytdagi eski ID'lar o'chib ketgan).
 RESULTS = [
@@ -272,10 +278,12 @@ FAQ = [
                 "qoldiring — shifokor jamoasi siz bilan bog'lanadi. Yoki to'g'ridan-to'g'ri "
                 "+998 90 008 38 78 raqamiga qo'ng'iroq qilishingiz mumkin."),
     dict(question="Qabul kunlari va vaqti qanday?",
-         answer="Dushanbadan Shanbagacha, soat 09:00 dan 19:00 gacha. Qabul oldindan yozilish asosida."),
+         answer="Dushanbadan Jumagacha, soat 09:00 dan 16:00 gacha. Tushlik 13:00 – 14:00. "
+                "Shanba va yakshanba — dam olish kunlari. Navbat jonli, oldindan qat'iy "
+                "yozilish shart emas — keladigan kuningiz telefon qilib kelsangiz bo'ladi."),
     dict(question="Qayerda qabul qilasiz?",
-         answer="Samarqand shahrida ikkita klinikada: Sintez Lab Klinikasi (Laxuti ko'chasi, 2A) va "
-                "Med Fast Clinic (Ozod Sharq ko'chasi, 8-uy)."),
+         answer="Qabul Samarqand shahridagi Sintez Lab Klinikasida — Laxuti ko'chasi, 2A "
+                "(mo'ljal: 6-hammom, Brilliant City). Boshqa manzilda qabul yo'q."),
     dict(question="HoLEP nima va oddiy operatsiyadan farqi nimada?",
          answer="HoLEP — prostata adenomasini holmium lazer yordamida olib tashlash usuli. "
                 "Kesma qilinmaydi, qon ketishi minimal, kateter tezroq olinadi va kasalxonada "
@@ -323,6 +331,25 @@ async def _upsert(session, model, rows, key, prune: bool = False):
                 await session.delete(obj)
 
 
+async def _drop_clinics(session, names: list[str]) -> None:
+    """Ro'yxatdan chiqarilgan klinikalarni bazadan olib tashlaydi.
+
+    Klinikaga eski ariza bog'langan bo'lishi mumkin — u holda ariza o'chirilmaydi,
+    faqat `clinic_id` bo'shatiladi («Farqi yo'q» bo'lib ko'rinadi).
+    """
+    for name in names:
+        obj = (
+            await session.execute(select(Clinic).where(Clinic.name == name))
+        ).scalar_one_or_none()
+        if not obj:
+            continue
+        await session.execute(
+            update(Appointment).where(Appointment.clinic_id == obj.id).values(clinic_id=None)
+        )
+        await session.delete(obj)
+        print(f"🗑  Klinika olib tashlandi: {name}")
+
+
 async def seed() -> None:
     await init_db()
     async with SessionLocal() as session:
@@ -335,6 +362,7 @@ async def seed() -> None:
 
         await _upsert(session, Service, SERVICES, "slug")
         await _upsert(session, Clinic, CLINICS, "name")
+        await _drop_clinics(session, RETIRED_CLINICS)
         await _upsert(session, Method, METHODS, "slug", prune=True)
         await _upsert(session, Advantage, ADVANTAGES, "title", prune=True)
         await _upsert(session, Result, RESULTS, "youtube_id", prune=True)

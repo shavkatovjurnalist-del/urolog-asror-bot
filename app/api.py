@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from html import escape
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import repo, report
+from app import ai, persona, repo, report
 from app.ai import answer as ai_answer
 from app.bot import calendar as cal
 from app.bot import texts as t
@@ -42,7 +43,7 @@ async def content(s: AsyncSession = Depends(get_session)) -> dict:
             "min_date": cal.min_date().isoformat(),
             "max_date": cal.max_date().isoformat(),
             "closed_weekdays": sorted(cal.WEEKEND),  # 5=shanba, 6=yakshanba
-            "lunch": "12:00 – 13:00",
+            "lunch": "13:00 – 14:00",
         },
         "doctor": {
             "full_name": doctor.full_name,
@@ -108,6 +109,13 @@ class AppointmentIn(BaseModel):
 class ConsultationIn(BaseModel):
     init_data: str = Field(default="", alias="initData")
     message: str
+
+    model_config = {"populate_by_name": True}
+
+
+class ChatIn(BaseModel):
+    init_data: str = Field(default="", alias="initData")
+    message: str = ""
 
     model_config = {"populate_by_name": True}
 
@@ -231,6 +239,102 @@ async def create_consultation(
     await report.new_consultation(c, username)
 
     return {"ok": True, "id": c.id, "answer": reply}
+
+
+# ─────────────────────────── Jonli murojaat (AI suhbati) ───────────────────────────
+# Bot va Mini App bitta suhbatni yuritadi — kalit `tg_id`. Bemor Mini App'da
+# boshlab, botda davom ettirsa ham AI oldingi gaplarni eslaydi.
+def _require_chat_user(init_data: str):
+    if not ASK_ENABLED:
+        raise HTTPException(503, "Jonli murojaat hozircha yopiq")
+    tg_user = _tg_user(init_data)
+    if not tg_user:
+        raise HTTPException(401, "Suhbat uchun Mini App'ni Telegram orqali oching")
+    return tg_user
+
+
+@router.post("/chat/start")
+async def chat_start(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> dict:
+    tg_user = _require_chat_user(payload.init_data)
+    await repo.upsert_user(s, tg_user, source="webapp")
+    await repo.clear_chat_history(s, tg_user.id)
+    await repo.add_chat_message(
+        s, tg_user.id, "model", persona.GREETING, source="webapp"
+    )
+    return {"ok": True, "greeting": persona.GREETING}
+
+
+@router.post("/chat")
+async def chat_send(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> dict:
+    tg_user = _require_chat_user(payload.init_data)
+    text = payload.message.strip()
+    if not text:
+        raise HTTPException(400, "Xabar bo'sh")
+
+    from app.bot.handlers import notify_admins
+    from app.bot.instance import bot
+
+    username = f"@{tg_user.username}" if tg_user.username else "Mini App"
+
+    # Shoshilinch holat — modelga bormaydi.
+    if ai.is_urgent(text):
+        await repo.add_chat_message(
+            s, tg_user.id, "user", text, source="webapp", flags="shoshilinch"
+        )
+        await repo.add_chat_message(
+            s, tg_user.id, "model", persona.URGENT, source="webapp", flags="shoshilinch"
+        )
+        alert = (
+            f"🔔 <b>Jonli suhbat — 🚨 SHOSHILINCH</b> (Mini App)\n\n"
+            f"👤 {escape(username)} · <code>{tg_user.id}</code>\n💬 {escape(text[:600])}"
+        )
+        await notify_admins(bot, alert)
+        await report.send(alert)
+        return {"ok": True, "reply": persona.URGENT, "flags": ["shoshilinch"]}
+
+    history = await repo.get_chat_history(s, tg_user.id, limit=ai.HISTORY_LIMIT)
+    await repo.add_chat_message(s, tg_user.id, "user", text, source="webapp")
+
+    reply, flags = await ai.chat(text, history=history)
+    if not reply:
+        log.warning("AI javob bermadi (webapp %s): %s", tg_user.id, ",".join(flags))
+        reply, flags = persona.FALLBACK, flags + ["fallback"]
+
+    await repo.add_chat_message(
+        s, tg_user.id, "model", reply, source="webapp", flags=",".join(flags)
+    )
+
+    # Suhbatni shifokorga bir marta bildirish — birinchi savol bo'yicha.
+    prior = [m for m in history if m["role"] == "user"]
+    if not prior:
+        user = await repo.upsert_user(s, tg_user, source="webapp")
+        c = await repo.create_consultation(
+            s, user_id=user.id, tg_id=tg_user.id, message=text, source="webapp-live"
+        )
+        await report.new_consultation(c, username)
+
+    price_asked = ai.asks_price(text) or "narx" in flags
+    if price_asked or "fallback" in flags:
+        reason = "Narx so'raldi" if price_asked else "⚠️ AI javob berolmadi"
+        alert = (
+            f"🔔 <b>Jonli suhbat — {reason}</b> (Mini App)\n\n"
+            f"👤 {escape(username)} · <code>{tg_user.id}</code>\n💬 {escape(text[:600])}"
+        )
+        await notify_admins(bot, alert)
+        await report.send(alert)
+
+    return {"ok": True, "reply": reply, "flags": flags}
+
+
+@router.post("/chat/end")
+async def chat_end(payload: ChatIn, s: AsyncSession = Depends(get_session)) -> dict:
+    tg_user = _require_chat_user(payload.init_data)
+    history = await repo.get_chat_history(s, tg_user.id, limit=60)
+    await repo.clear_chat_history(s, tg_user.id)
+    if any(m["role"] == "user" for m in history):
+        username = f"@{tg_user.username}" if tg_user.username else "Mini App"
+        await report.live_chat_transcript(history, username, tg_user.id)
+    return {"ok": True}
 
 
 # ─────────────────────────── Kunlik xulosa ───────────────────────────

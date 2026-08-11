@@ -17,7 +17,7 @@ services:
       - key: REPORT_CHAT_IDS
         sync: false
       - key: ASK_ENABLED
-        value: "false"
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: BASE_URL
@@ -25,6 +25,11 @@ services:
       - key: WEBHOOK_SECRET
         generateValue: true
       - key: AI_ENABLED
-        value: "false"
+        value: "true"
+      # Google AI Studio kaliti — Render Dashboard'da qo'lda kiritiladi
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: "gemini-3.5-flash-lite"
       - key: PYTHON_VERSION
         value: "3.11.9"

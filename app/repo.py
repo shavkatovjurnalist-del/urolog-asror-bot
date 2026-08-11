@@ -1,12 +1,13 @@
 """Bazadan kontent o'qish — bot va Mini App API uchun umumiy qatlam."""
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Advantage,
     Appointment,
+    ChatMessage,
     Clinic,
     Consultation,
     Doctor,
@@ -87,3 +88,32 @@ async def create_consultation(s: AsyncSession, **kwargs) -> Consultation:
     await s.commit()
     await s.refresh(c)
     return c
+
+
+# ─────────────────────── «Jonli murojaat» suhbati ───────────────────────
+async def add_chat_message(
+    s: AsyncSession, tg_id: int, role: str, text: str,
+    source: str = "bot", flags: str = "",
+) -> ChatMessage:
+    m = ChatMessage(tg_id=tg_id, role=role, text=text, source=source, flags=flags)
+    s.add(m)
+    await s.commit()
+    return m
+
+
+async def get_chat_history(s: AsyncSession, tg_id: int, limit: int = 14) -> list[dict]:
+    """Modelga beriladigan suhbat tarixi — eng eskisi birinchi."""
+    q = (
+        select(ChatMessage)
+        .where(ChatMessage.tg_id == tg_id)
+        .order_by(ChatMessage.id.desc())
+        .limit(limit)
+    )
+    rows = list((await s.execute(q)).scalars())
+    return [{"role": m.role, "text": m.text} for m in reversed(rows)]
+
+
+async def clear_chat_history(s: AsyncSession, tg_id: int) -> None:
+    """Suhbat yakunlanganda tarix tozalanadi — keyingi murojaat toza boshlanadi."""
+    await s.execute(delete(ChatMessage).where(ChatMessage.tg_id == tg_id))
+    await s.commit()

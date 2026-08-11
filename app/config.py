@@ -52,7 +52,9 @@ else:
         _raw_db = base + ("?" + "&".join(keep) if keep else "")
     DATABASE_URL = _raw_db
 
+# AI-konsultant (Google Gemini). Kalit: aistudio.google.com
 AI_ENABLED: bool = os.getenv("AI_ENABLED", "false").lower() == "true"
 AI_API_KEY: str = os.getenv("AI_API_KEY", "")
+AI_MODEL: str = os.getenv("AI_MODEL", "gemini-3.5-flash-lite")
 
 WEBAPP_DIR = BASE_DIR / "webapp"

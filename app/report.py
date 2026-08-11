@@ -130,6 +130,41 @@ async def new_consultation(c: Consultation, username: str) -> None:
     await send(text)
 
 
+# ─────────────────────── Jonli suhbat yozuvi ───────────────────────
+async def live_chat_transcript(history: list[dict], username: str, tg_id: int) -> None:
+    """Jonli suhbat yakunlangach to'liq yozuvni shifokorga yuboradi.
+
+    Suhbat bazadan tozalanadi (bepul tarif, o'sib ketmasin) — doimiy nusxa
+    aynan shu xabar bo'ladi.
+    """
+    if not history:
+        return
+
+    lines = []
+    for m in history:
+        who = "👤" if m["role"] == "user" else "🤖"
+        lines.append(f"{who} {escape(m['text'])}")
+
+    body = "\n\n".join(lines)
+    head = (
+        f"🗂 <b>JONLI SUHBAT YAKUNLANDI</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 {escape(username or '—')} · <code>{tg_id}</code>\n"
+        f"🗓 {fmt_date(datetime.utcnow())}, {fmt_time(datetime.utcnow())}\n\n"
+    )
+
+    # Telegram cheklovi 4096 belgi — uzun suhbat bo'laklab yuboriladi.
+    limit = 3800
+    chunk = head
+    for line in body.split("\n\n"):
+        if len(chunk) + len(line) + 2 > limit:
+            await send(chunk)
+            chunk = ""
+        chunk += line + "\n\n"
+    if chunk.strip():
+        await send(chunk)
+
+
 # ─────────────────────────── Kunlik xulosa ───────────────────────────
 async def daily_summary(days: int = 1) -> str:
     """Oxirgi `days` kun bo'yicha xulosa tuzadi va yuboradi."""

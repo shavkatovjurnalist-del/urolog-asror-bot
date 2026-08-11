@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from datetime import time as dtime
+from html import escape
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
@@ -17,8 +18,7 @@ from aiogram.types import (
     Message,
 )
 
-from app import repo, report
-from app.ai import answer as ai_answer
+from app import ai, persona, repo, report
 from app.bot import calendar as cal
 from app.bot import keyboards as kb
 from app.bot import texts as t
@@ -28,6 +28,11 @@ from app.models import Consultation
 
 log = logging.getLogger(__name__)
 router = Router()
+
+# Jonli suhbat alohida routerda va Dispatcher'ga BIRINCHI ulanadi
+# (`app/bot/instance.py`). Sabab: suhbat davomida bemor yozgan har qanday matn
+# AI ga borishi kerak — menyu tugmalarining matnini yozib yuborsa ham.
+live_router = Router()
 
 PHOTO_DOCTOR = BASE_DIR / "webapp" / "assets" / "asror.webp"
 
@@ -43,8 +48,10 @@ class Booking(StatesGroup):
     confirm = State()
 
 
-class Ask(StatesGroup):
-    message = State()
+class Live(StatesGroup):
+    """«Jonli murojaat» — AI bilan davomli suhbat."""
+
+    chatting = State()
 
 
 # ─────────────────────────── Yordamchilar ───────────────────────────
@@ -60,9 +67,16 @@ def _uname(user) -> str:
     return f"@{user.username}" if getattr(user, "username", None) else f"id{user.id}"
 
 
+async def _leave_live_if_any(message: Message, state: FSMContext) -> None:
+    """/start yoki /menu bosilsa jonli suhbat tartibli yopiladi (tarix shifokorga ketadi)."""
+    if await state.get_state() == Live.chatting.state:
+        await _finish_live(message, state, by_user=False)
+
+
 # ─────────────────────────── /start ───────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
+    await _leave_live_if_any(message, state)
     await state.clear()
     async with session_scope() as s:
         await repo.upsert_user(s, message.from_user)
@@ -80,6 +94,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 @router.message(Command("menu"))
 @router.message(Command("help"))
 async def cmd_menu(message: Message, state: FSMContext) -> None:
+    await _leave_live_if_any(message, state)
     await state.clear()
     await message.answer(
         "📋 Asosiy menyu. Kerakli bo'limni tanlang:", reply_markup=kb.main_menu()
@@ -305,6 +320,11 @@ async def _book_after_phone(message: Message, state: FSMContext, phone: str) -> 
         return
     async with session_scope() as s:
         clinics = await repo.get_clinics(s)
+    # Qabul faqat bitta klinikada bo'lsa — tanlash so'ralmaydi.
+    if len(clinics) == 1:
+        await state.update_data(clinic_id=clinics[0].id)
+        await _ask_service(message, state)
+        return
     rows = [[InlineKeyboardButton(text=f"🏥 {c.name}", callback_data=f"bkc:{c.id}")] for c in clinics]
     rows.append([InlineKeyboardButton(text="🤷 Farqi yo'q", callback_data="bkc:0")])
     await state.set_state(Booking.clinic)
@@ -470,55 +490,151 @@ async def book_save(cq: CallbackQuery, state: FSMContext) -> None:
     await report.new_appointment(appt, clinic_name, service_name, _uname(cq.from_user))
 
 
-# ─────────────────────────── Murojaat / Savol (AI joyi) ───────────────────────────
-@router.message(F.text == kb.BTN_ASK)
-async def ask_start(message: Message, state: FSMContext) -> None:
+# ─────────────────────────── Jonli murojaat (AI suhbati) ───────────────────────────
+@router.message(F.text.in_({kb.BTN_LIVE, kb.BTN_ASK}))
+async def live_start(message: Message, state: FSMContext) -> None:
+    """Suhbatni boshlaydi: AI o'zi salom berib, masalani so'raydi."""
     if not ASK_ENABLED:
         await message.answer(t.ASK_DISABLED, reply_markup=kb.main_menu())
         return
-    await state.set_state(Ask.message)
+
+    await state.clear()
+    async with session_scope() as s:
+        await repo.upsert_user(s, message.from_user)
+        # Yangi suhbat — eski tarix aralashmasin.
+        await repo.clear_chat_history(s, message.from_user.id)
+        await repo.add_chat_message(
+            s, message.from_user.id, "model", persona.GREETING, source="bot"
+        )
+
+    await state.set_state(Live.chatting)
+    await state.update_data(started=datetime.utcnow().isoformat(), reported=False)
+    await message.answer(persona.GREETING, reply_markup=kb.live_chat_kb())
+
+
+# ─── Suhbat davomidagi handlerlar (live_router — birinchi tekshiriladi) ───
+@live_router.message(Live.chatting, Command("start", "menu", "help"))
+async def live_command(message: Message, state: FSMContext) -> None:
+    """Suhbat ichida /start yoki /menu — suhbat tartibli yopilib, menyu chiqadi."""
+    await _finish_live(message, state, by_user=False)
     await message.answer(
-        "💬 <b>Murojaat / Savol</b>\n\n"
-        "Savolingizni yoki shikoyatingizni batafsil yozing. Shifokor javob beradi.\n\n"
-        "🤖 <i>Yaqin orada bu bo'limga AI-konsultant ulanadi.</i>",
-        reply_markup=kb.cancel_kb(),
+        "📋 Suhbat yakunlandi. Asosiy menyu:", reply_markup=kb.main_menu()
     )
 
 
-@router.message(Ask.message, F.text)
-async def ask_save(message: Message, state: FSMContext) -> None:
+@live_router.message(Live.chatting, F.text == kb.BTN_END_CHAT)
+async def live_end(message: Message, state: FSMContext) -> None:
+    await _finish_live(message, state, by_user=True)
+
+
+@live_router.message(Live.chatting, F.text == kb.BTN_BOOK)
+async def live_to_booking(message: Message, state: FSMContext) -> None:
+    """Suhbatdan qabulga yozilishga o'tish — suhbat yozuvi yo'qolmasin."""
+    await _finish_live(message, state, by_user=False)
+    await book_start(message, state)
+
+
+@live_router.message(Live.chatting, F.photo | F.voice | F.video_note | F.document)
+async def live_media(message: Message, state: FSMContext) -> None:
+    """Rasm va ovozli xabar. Anketa: cheklov yo'q, shifokorning o'zi ko'radi."""
+    note = "[bemor rasm/ovozli xabar yubordi]"
+    async with session_scope() as s:
+        await repo.add_chat_message(s, message.from_user.id, "user", note, flags="media")
+    reply = (
+        "Yuborganingizni oldim. Asror Abbosovichning o'zi ko'rib chiqadi va "
+        "javobini aytadi.\n\nShu orada yozma savolingiz bo'lsa, bemalol yozavering."
+    )
+    async with session_scope() as s:
+        await repo.add_chat_message(s, message.from_user.id, "model", reply)
+    await message.answer(reply, reply_markup=kb.live_chat_kb())
+    await _escalate(message, state, "Rasm / ovozli xabar yuborildi", note)
+
+
+@live_router.message(Live.chatting, F.text)
+async def live_message(message: Message, state: FSMContext) -> None:
     text = message.text.strip()
-    if len(text) < 5:
-        await message.answer("Iltimos, savolingizni biroz batafsilroq yozing.")
+    tg_id = message.from_user.id
+
+    # 1. Shoshilinch holat — modelga umuman bormaydi.
+    if ai.is_urgent(text):
+        async with session_scope() as s:
+            await repo.add_chat_message(s, tg_id, "user", text, flags="shoshilinch")
+            await repo.add_chat_message(s, tg_id, "model", persona.URGENT, flags="shoshilinch")
+        await message.answer(persona.URGENT, reply_markup=kb.live_chat_kb())
+        await _escalate(message, state, "🚨 SHOSHILINCH", text)
         return
 
+    # 2. Suhbat tarixi bilan modelga
+    async with session_scope() as s:
+        history = await repo.get_chat_history(s, tg_id, limit=ai.HISTORY_LIMIT)
+        await repo.add_chat_message(s, tg_id, "user", text)
+
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    reply, flags = await ai.chat(text, history=history)
+
+    if not reply:
+        log.warning("AI javob bermadi (%s): %s", tg_id, ",".join(flags))
+        reply = persona.FALLBACK
+        flags = flags + ["fallback"]
+
+    async with session_scope() as s:
+        await repo.add_chat_message(s, tg_id, "model", reply, flags=",".join(flags))
+
+    await message.answer(reply, reply_markup=kb.live_chat_kb())
+
+    # 3. Shifokor ko'rishi kerak bo'lgan holatlar
+    if ai.asks_price(text) or "narx" in flags:
+        await _escalate(message, state, "Narx so'raldi", text)
+    elif "fallback" in flags:
+        await _escalate(message, state, "⚠️ AI javob berolmadi", text)
+    else:
+        await _report_once(message, state, text)
+
+
+async def _finish_live(message: Message, state: FSMContext, by_user: bool) -> None:
+    """Suhbatni yopadi: tarixni shifokorga yuboradi va bazadan tozalaydi."""
+    tg_id = message.from_user.id
+    async with session_scope() as s:
+        history = await repo.get_chat_history(s, tg_id, limit=60)
+        await repo.clear_chat_history(s, tg_id)
+    await state.clear()
+
+    if len([m for m in history if m["role"] == "user"]) > 0:
+        await report.live_chat_transcript(history, _uname(message.from_user), tg_id)
+
+    if by_user:
+        await message.answer(
+            "Suhbat yakunlandi. Kerak bo'lsa istalgan vaqtda yana yozavering — "
+            "menyudan «💬 Jonli murojaat» tugmasini bosing.",
+            reply_markup=kb.main_menu(),
+        )
+
+
+async def _report_once(message: Message, state: FSMContext, text: str) -> None:
+    """Suhbatning boshlanganini shifokorga bir marta bildiradi."""
+    data = await state.get_data()
+    if data.get("reported"):
+        return
+    await state.update_data(reported=True)
     async with session_scope() as s:
         user = await repo.upsert_user(s, message.from_user)
         c = await repo.create_consultation(
-            s, user_id=user.id, tg_id=message.from_user.id, message=text, source="bot"
+            s, user_id=user.id, tg_id=message.from_user.id, message=text, source="bot-live"
         )
-        admin_text = t.admin_consultation(c, _uname(message.from_user))
-
-    await state.clear()
-
-    # AI ulanganda shu joyda javob qaytadi; hozircha None keladi.
-    reply = await ai_answer(text)
-    if reply:
-        async with session_scope() as s:
-            obj = await s.get(Consultation, c.id)
-            obj.ai_answer = reply
-            obj.answered_by = "ai"
-            obj.answered_at = datetime.utcnow()
-            obj.status = "answered"
-            await s.commit()
-        await message.answer(f"🤖 {reply}\n\n{t.DISCLAIMER}", reply_markup=kb.main_menu())
-    else:
-        await message.answer(t.ASK_PLACEHOLDER, reply_markup=kb.main_menu())
-
-    await notify_admins(message.bot, admin_text)
-    async with session_scope() as s:
         obj = await s.get(Consultation, c.id)
         await report.new_consultation(obj, _uname(message.from_user))
+
+
+async def _escalate(message: Message, state: FSMContext, reason: str, text: str) -> None:
+    """Diqqat talab qiladigan xabarni shifokorga darhol uzatadi."""
+    await _report_once(message, state, text)
+    body = (
+        f"🔔 <b>Jonli suhbat — {escape(reason)}</b>\n\n"
+        f"👤 {escape(_uname(message.from_user))} · <code>{message.from_user.id}</code>\n"
+        f"💬 {escape(text[:600])}"
+    )
+    await notify_admins(message.bot, body)
+    await report.send(body)
 
 
 # ─────────────────────────── Admin ───────────────────────────
@@ -600,8 +716,10 @@ async def stale_callback(cq: CallbackQuery, state: FSMContext) -> None:
 async def fallback(message: Message, state: FSMContext) -> None:
     if await state.get_state():
         return
-    await message.answer(
-        "Menyudan kerakli bo'limni tanlang 👇\n\n"
-        "Savolingiz bo'lsa — «💬 Murojaat / Savol» tugmasini bosing.",
-        reply_markup=kb.main_menu(),
+    hint = (
+        "Savolingiz bo'lsa — «💬 Jonli murojaat» tugmasini bosing, "
+        "shifokorning admini bilan yozishasiz."
+        if ASK_ENABLED
+        else "Qabulga yozilish uchun «📅 Qabulga yozilish» tugmasini bosing."
     )
+    await message.answer(f"Menyudan kerakli bo'limni tanlang 👇\n\n{hint}", reply_markup=kb.main_menu())
