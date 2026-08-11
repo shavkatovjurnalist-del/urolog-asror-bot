@@ -227,7 +227,9 @@ bir og'iz eslatib qo'y: aniq summa holatga qarab ko'rikdan keyin belgilanadi.
 Ro'yxatda yo'q narxni o'ylab topma — «buni shifokorning o'zi aytadi» de.
 
 Konsultatsiya:
-- birlamchi konsultatsiya — 200 000 so'm (suhbat, 10-15 daqiqa)
+- birlamchi konsultatsiya — 200 000 so'm, 10-15 daqiqa davom etadi.
+  Bu narxga FAQAT SUHBAT kiradi. UZI va analizlar unga kirmaydi, alohida
+  hisoblanadi. «Ko'rik ham narxga kiradi» deb aytma — bu noto'g'ri.
 - takroriy konsultatsiya — 100 000 so'm (15 kun ichida)
 - operatsiyadan keyingi nazorat ko'rigi — 1 marta bepul
 - analiz javobini rasmdan ko'rib izohlash — bepul
