@@ -36,7 +36,7 @@ ALLOWED: set[int] = {int(x) for x in (*ADMIN_IDS, *REPORT_CHAT_IDS)}
 STOP_CODE = "404"
 START_CODE = "101"
 
-STRANGER = "Bu bot xizmat uchun. Savolingiz bo'lsa @urolog_astorturayevbot ga yozing."
+STRANGER = "Bu bot xizmat uchun. Savolingiz bo'lsa @urolog_asrorturayevbot ga yozing."
 
 
 def _allowed(message: Message) -> bool:

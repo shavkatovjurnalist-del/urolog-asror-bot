@@ -3,7 +3,7 @@
 Urolog-androlog **To'rayev Asror Abbosovich** uchun Telegram bot va uning ichidagi
 Mini App (saytning Telegram versiyasi).
 
-Bot: [@urolog_astorturayevbot](https://t.me/urolog_astorturayevbot) ·
+Bot: [@urolog_asrorturayevbot](https://t.me/urolog_asrorturayevbot) ·
 Sayt: [urologasrorturayev.uz](https://urologasrorturayev.uz)
 
 **Jonli manzillar**
