@@ -42,6 +42,12 @@ SUPPORT_GROUP_ID: int = int(os.getenv("SUPPORT_GROUP_ID", "0") or 0)
 # suhbatni shunga mos davom ettiradi.
 HUMAN_PAUSE_MINUTES: int = int(os.getenv("HUMAN_PAUSE_MINUTES", "60"))
 
+# Boshqa adminga signal yuborilgach AI qancha kutadi (daqiqa).
+# Shu vaqt ichida admin «Javob beraman» yoki «AI davom ettirsin» tugmasini
+# bosishi kutiladi. Bosilmasa AI bemorga xabar berib suhbatni davom ettiradi
+# — bemor javobsiz qolib ketmasin.
+WAIT_MINUTES: int = int(os.getenv("WAIT_MINUTES", "30"))
+
 BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "secret")
 WEBHOOK_PATH: str = f"/webhook/{WEBHOOK_SECRET}"

@@ -112,6 +112,80 @@ async def new_appointment(appt: Appointment, clinic: str, service: str, username
     await send(text, markup=web_app, fallback=plain)
 
 
+# ─────────────────── Boshqa admin kerak bo'lgan holat ───────────────────
+def _summary(history: list[dict], limit: int = 3) -> str:
+    """Suhbatning qisqa ko'rinishi — butun yozishma emas.
+
+    Shifokorning talabi: signalda butun chat kerak emas, oxirgi xabar va
+    nima haqida gaplashilgani yetarli. To'liq yozishma baribir guruhdagi
+    mavzuda turadi, havola bilan bir bosishda ochiladi.
+    """
+    tail = history[-limit * 2:] if history else []
+    lines = []
+    for m in tail:
+        who = "👤" if m["role"] == "user" else "🤖"
+        txt = m["text"].strip().replace("\n", " ")
+        if len(txt) > 160:
+            txt = txt[:157] + "…"
+        lines.append(f"{who} {escape(txt)}")
+    return "\n".join(lines)
+
+
+async def escalation(
+    tg_id: int,
+    who: str,
+    reason: str,
+    history: list[dict],
+    topic_id: int | None,
+    waiting: bool,
+) -> None:
+    """«Boshqa admin kerak» signali — ikkita tugma va mavzuga havola bilan.
+
+    `waiting=True` bo'lsa AI bemorga javob bermay javob kutyapti; admin
+    tugmani bosmasa muddat tugab AI o'zi davom etadi.
+    """
+    from app.admin import make_esc_token
+    from app.config import BASE_URL, WAIT_MINUTES
+    from app.support import topic_link
+
+    head = "🔔 <b>BOSHQA ADMIN KERAK</b>" if waiting else "🔔 <b>DIQQAT TALAB QILADI</b>"
+    body = (
+        f"{head}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 {escape(who)}\n"
+        f"📌 {escape(reason)}\n\n"
+        f"{_summary(history)}\n"
+    )
+    if waiting:
+        body += (
+            f"\n⏳ AI bu bemorga javob bermay turibdi. {WAIT_MINUTES} daqiqa "
+            f"ichida tanlamasangiz, AI o'zi davom ettiradi."
+        )
+
+    me = f"{BASE_URL}/admin/esc?tg={tg_id}&action=me&token={make_esc_token(tg_id, 'me')}"
+    ai_ = f"{BASE_URL}/admin/esc?tg={tg_id}&action=ai&token={make_esc_token(tg_id, 'ai')}"
+    link = topic_link(topic_id)
+
+    rows_web = [[
+        {"text": "✋ Javob beraman", "web_app": {"url": me}},
+        {"text": "🤖 AI davom ettirsin", "web_app": {"url": ai_}},
+    ]]
+    rows_plain = [[
+        {"text": "✋ Javob beraman", "url": me},
+        {"text": "🤖 AI davom ettirsin", "url": ai_},
+    ]]
+    if link:
+        chat_row = [{"text": "💬 Suhbatni ochish", "url": link}]
+        rows_web.append(chat_row)
+        rows_plain.append(chat_row)
+
+    await send(
+        body,
+        markup={"inline_keyboard": rows_web},
+        fallback={"inline_keyboard": rows_plain},
+    )
+
+
 # ─────────────────────────── Yangi murojaat ───────────────────────────
 async def new_consultation(c: Consultation, username: str) -> None:
     created = c.created_at or datetime.utcnow()

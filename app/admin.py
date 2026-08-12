@@ -36,6 +36,11 @@ def check_token(appt_id: int, action: str, token: str) -> bool:
     return hmac.compare_digest(make_token(appt_id, action), token or "")
 
 
+def make_esc_token(tg_id: int, action: str) -> str:
+    msg = f"esc:{tg_id}:{action}".encode()
+    return hmac.new(WEBHOOK_SECRET.encode(), msg, hashlib.sha256).hexdigest()[:32]
+
+
 def _page(title: str, body: str, color: str) -> HTMLResponse:
     html = f"""<!DOCTYPE html>
 <html lang="uz"><head><meta charset="utf-8">
@@ -61,6 +66,71 @@ def _page(title: str, body: str, color: str) -> HTMLResponse:
 <script>try{{Telegram.WebApp.ready();Telegram.WebApp.expand();}}catch(e){{}}</script>
 </body></html>"""
     return HTMLResponse(html)
+
+
+ESC_ACTIONS = {"me", "ai"}
+
+
+@router.get("/esc")
+async def escalation_action(tg: int, action: str, token: str = "") -> HTMLResponse:
+    """«Javob beraman» / «AI davom ettirsin» tugmalari shu yerga tushadi.
+
+    Nima uchun tugma callback emas, havola: signal @ai_humoyunbot orqali
+    ketadi, uning webhook'i esa boshqa loyihaga ulangan — callback'ni bu
+    servis umuman ko'rmaydi. Arizalarni tasdiqlashda ham xuddi shu yo'l.
+    """
+    if action not in ESC_ACTIONS:
+        raise HTTPException(400, "Noma'lum amal")
+    if not hmac.compare_digest(make_esc_token(tg, action), token or ""):
+        raise HTTPException(403, "Imzo noto'g'ri")
+
+    from app import support
+    from app.bot.instance import bot
+    from app.config import HUMAN_PAUSE_MINUTES
+
+    async with SessionLocal() as s:
+        th = await support.get_thread(s, tg)
+        already = th.mode if th else None
+
+    if action == "me":
+        await support.set_mode(tg, "human")
+        await support.notify(
+            bot, tg, "✋ <b>Admin javob beradi</b> — AI bu suhbatda jim turadi."
+        )
+        return _page(
+            "Sizga topshirildi",
+            f'<div class="ico">✋</div><h1>Javobni siz yozasiz</h1>'
+            f"<p>AI bu bemorga {HUMAN_PAUSE_MINUTES} daqiqa javob bermaydi. "
+            f"Guruhdagi mavzuga yozgan xabaringiz bemorga boradi.</p>",
+            "#b8860b",
+        )
+
+    # action == "ai" — AI suhbatni davom ettiradi
+    await support.set_mode(tg, "ai")
+    await support.notify(bot, tg, "🤖 <b>AI davom ettiradi</b> — pauza bekor qilindi.")
+    sent = False
+    try:
+        await bot.send_message(
+            tg,
+            "Rahmat, kutganingiz uchun. Savolingizni davom ettiraylik — "
+            "yana nimani bilmoqchi edingiz?",
+        )
+        sent = True
+    except Exception as e:
+        log.warning("Bemorga (%s) davom xabari ketmadi: %s", tg, e)
+
+    note = (
+        "Bemorga suhbat davom etayotgani haqida xabar yuborildi."
+        if sent
+        else "Bemorga xabar yuborilmadi — u botni bloklagan bo'lishi mumkin."
+    )
+    if already == "ai":
+        note = "Bu suhbat allaqachon AI da edi. " + note
+    return _page(
+        "AI davom ettiradi",
+        f'<div class="ico">🤖</div><h1>AI javob berishda davom etadi</h1><p>{note}</p>',
+        "#007a70",
+    )
 
 
 @router.get("/appt")

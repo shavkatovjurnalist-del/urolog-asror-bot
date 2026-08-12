@@ -45,16 +45,21 @@ async def lifespan(app: FastAPI):
     else:
         log.warning("BASE_URL https emas — webhook o'rnatilmadi (lokal rejim).")
 
-    # Kunlik xulosa jadvali (Toshkent vaqti bilan 20:00)
+    # Fon vazifalari: kunlik xulosalar va javob kutish nazorati
     import asyncio
 
     from app.report import daily_scheduler
+    from app.support import pending_watcher
 
-    task = asyncio.create_task(daily_scheduler())
+    tasks = [
+        asyncio.create_task(daily_scheduler()),
+        asyncio.create_task(pending_watcher(bot)),
+    ]
 
     yield
 
-    task.cancel()
+    for task in tasks:
+        task.cancel()
     await bot.session.close()
 
 

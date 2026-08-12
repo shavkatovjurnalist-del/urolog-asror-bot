@@ -165,8 +165,11 @@ CASES: list[tuple[str, str, dict]] = [
     # ---------- Tushunmaslik va jonli odam ----------
     ("tushunarsiz xabar", "asdfgh qwerty zxcvb",
      {"any": [r"tushunmadim", r"tushunolmadim", r"aniqroq"]}),
-    ("odam so'radi", "men jonli odam bilan gaplashmoqchiman, adminni chaqiring",
-     {"any": [r"xabar berdim", r"tez orada", r"javob berishadi", r"bog'lanishadi"]}),
+    # Odam so'rovining o'zi kodda ushlanadi (`ai.asks_human`) — modelga
+    # bormaydi. Bu yerda modelning O'ZI odam taklif qilmasligi tekshiriladi.
+    ("odamni o'zi taklif qilmasin", "prostata bezim kattalashgan ekan, nima qilay?",
+     {"never": [r"adminga ula", r"operatorga", r"boshqa adminga",
+                r"jonli (odam|admin|operator)"]}),
 
     # ---------- Uslub: takrorlanuvchi kirish so'zlari ----------
     # Bobur sinovda topgan xato: har javob «Tushunarli…» bilan boshlanardi.
@@ -225,6 +228,26 @@ URGENT_NO = [
     "operatsiyadan keyin qachon ishga chiqaman",
 ]
 
+# Bemor odamni so'radimi (`ai.asks_human`) — bu kodda hal qilinadi, chunki
+# modelga ishonib bo'lmadi: u «hozir xabar beraman» deb yozardi-yu, hech
+# qanday signal ketmasdi (Bobur 2026-08-11 da jonli sinovda topdi).
+HUMAN_ASK_YES = [
+    "odam bilan gaplashmoqchiman",
+    "adminni chaqiring",
+    "jonli operator kerak",
+    "boshqa admin bilan gaplashsam bo'ladimi",
+    "shifokorning o'zi bilan gaplashmoqchiman",
+    "оператор нужен",
+]
+# Bular oddiy savol — eskalatsiya bo'lib ketmasligi kerak.
+HUMAN_ASK_NO = [
+    "varikosele narxi qancha",
+    "salom",
+    "qabulga yozilmoqchiman",
+    "shifokor qachon javob beradi",
+    "shifokor bilan qabulda gaplashamanmi",
+]
+
 # Narx ro'yxati to'sig'i (`ai.guard`) — modelsiz, tez tekshiriladi.
 # Model qoidani buzib ro'yxat bersa ham, mijozga bu matn yetib bormaydi.
 PRICE_LIST_BLOCK = [
@@ -277,6 +300,20 @@ async def run_suite(only: str | None, verbose: bool, delay: float) -> int:
     print(f"{'✅' if not urgent_fails else '❌'} shoshilinch aniqlash: "
           f"{len(URGENT_YES) + len(URGENT_NO) - urgent_fails}"
           f"/{len(URGENT_YES) + len(URGENT_NO)}\n")
+
+    human_fails = 0
+    for q in HUMAN_ASK_YES:
+        if not ai.asks_human(q):
+            print(f"❌ odam so'rovi ANIQLANMADI: «{q}»")
+            human_fails += 1
+    for q in HUMAN_ASK_NO:
+        if ai.asks_human(q):
+            print(f"❌ odam so'rovi YOLG'ON ishladi: «{q}»")
+            human_fails += 1
+    total_human = len(HUMAN_ASK_YES) + len(HUMAN_ASK_NO)
+    print(f"{'✅' if not human_fails else '❌'} odam so'rovini aniqlash: "
+          f"{total_human - human_fails}/{total_human}\n")
+    urgent_fails += human_fails
 
     guard_fails = 0
     for txt in PRICE_LIST_BLOCK:

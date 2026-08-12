@@ -24,7 +24,6 @@ from app.bot import keyboards as kb
 from app.bot import texts as t
 from app.config import ADMIN_IDS, ASK_ENABLED, BASE_DIR, SUPPORT_GROUP_ID
 from app.db import session_scope
-from app.models import Consultation
 
 log = logging.getLogger(__name__)
 router = Router()
@@ -641,14 +640,28 @@ async def _handle_patient_text(
         await _escalate(message, state, "🚨 SHOSHILINCH", text)
         return
 
-    # 2. Suhbatga odam aralashgan bo'lsa AI jim turadi — javobni admin
-    #    guruhdan yozadi. Pauza tugagach AI o'zi qaytadi.
+    # 2. Suhbatga odam aralashgan yoki javobi kutilayotgan bo'lsa AI jim
+    #    turadi. Ikkala muddat ham o'zi tugaydi (`support.is_paused`).
     if await support.is_paused(tg_id):
         async with session_scope() as s:
             await repo.add_chat_message(s, tg_id, "user", text, flags="odam_rejimi")
         return
 
-    # 3. Suhbat tarixi bilan modelga
+    # 3. Bemor odamni so'radi — AI o'zi to'xtaydigan yagona holat.
+    #    Modelga ishonib bo'lmaydi: u «hozir xabar beraman» deb yozardi-yu,
+    #    hech qanday signal ketmasdi (Bobur sinovda topdi).
+    if ai.asks_human(text):
+        async with session_scope() as s:
+            await repo.add_chat_message(s, tg_id, "user", text, flags="odam_soradi")
+            await repo.add_chat_message(
+                s, tg_id, "model", persona.HANDOFF, flags="odam_soradi"
+            )
+        await message.answer(persona.HANDOFF, reply_markup=kb.live_chat_kb())
+        await support.relay_ai(message.bot, tg_id, persona.HANDOFF)
+        await _escalate(message, state, "Bemor boshqa admin so'radi", text, wait=True)
+        return
+
+    # 4. Suhbat tarixi bilan modelga
     async with session_scope() as s:
         history = await repo.get_chat_history(s, tg_id, limit=ai.HISTORY_LIMIT)
         await repo.add_chat_message(s, tg_id, "user", text)
@@ -675,14 +688,17 @@ async def _handle_patient_text(
     if ai.asks_location(text):
         await _send_clinic_location(message)
 
-    # 5. Shifokor ko'rishi kerak bo'lgan holatlar
+    # 5. Boshqa admin ko'rishi kerak bo'lgan holatlar.
+    #    Oddiy suhbat uchun signal YUBORILMAYDI — u guruhdagi mavzuda
+    #    baribir jonli ko'rinib turadi. Ilgari har yangi bemor signal
+    #    bo'lib ketardi va bu shovqin edi.
     if "fallback" in flags:
-        await _escalate(message, state, "⚠️ AI javob berolmadi", text)
+        # AI javob berolmadi — bemor kutadi, javobni odam yozadi.
+        await _escalate(message, state, "AI javob berolmadi", text, wait=True)
     elif ai.is_unclear(reply):
-        # AI bemorni tushunmadi — javob mijozga ketdi, endi odam ko'rsin.
-        await _escalate(message, state, "❓ Noaniq xabar — AI tushunmadi", text)
-    else:
-        await _report_once(message, state, text)
+        # AI tushunmadi, lekin bemorga «aniqroq yozing» deb javob berdi —
+        # suhbat davom etadi, admin faqat xabardor bo'ladi.
+        await _escalate(message, state, "Noaniq xabar — AI tushunmadi", text)
 
 
 async def _send_clinic_location(message: Message) -> None:
@@ -723,39 +739,55 @@ async def _finish_live(message: Message, state: FSMContext, by_user: bool) -> No
         )
 
 
-async def _report_once(message: Message, state: FSMContext, text: str) -> None:
-    """Suhbatning boshlanganini shifokorga bir marta bildiradi."""
+async def _record_consultation(message: Message, state: FSMContext, text: str) -> None:
+    """Murojaatni bazaga bir marta yozadi (statistika uchun).
+
+    Xabar YUBORMAYDI: signal faqat `_escalate` orqali ketadi.
+    """
     data = await state.get_data()
     if data.get("reported"):
         return
     await state.update_data(reported=True)
     async with session_scope() as s:
         user = await repo.upsert_user(s, message.from_user)
-        c = await repo.create_consultation(
-            s, user_id=user.id, tg_id=message.from_user.id, message=text, source="bot-live"
+        await repo.create_consultation(
+            s, user_id=user.id, tg_id=message.from_user.id, message=text,
+            source="bot-live",
         )
-        obj = await s.get(Consultation, c.id)
-        await report.new_consultation(obj, _uname(message.from_user))
 
 
-async def _escalate(message: Message, state: FSMContext, reason: str, text: str) -> None:
-    """Diqqat talab qiladigan xabarni shifokorga darhol uzatadi."""
-    await _report_once(message, state, text)
-    body = (
-        f"🔔 <b>Jonli suhbat — {escape(reason)}</b>\n\n"
-        f"👤 {escape(_uname(message.from_user))} · <code>{message.from_user.id}</code>\n"
-        f"💬 {escape(text[:600])}"
+async def _escalate(
+    message: Message, state: FSMContext, reason: str, text: str, wait: bool = False
+) -> None:
+    """Boshqa adminga signal — tugmali xabar bilan.
+
+    `wait=True` — AI javob bermay javob kutadi (bemorga «ulayapman» deb
+    aytilgan). Admin `WAIT_MINUTES` ichida tanlamasa AI o'zi davom etadi.
+    `wait=False` — suhbat davom etaveradi, admin faqat xabardor bo'ladi.
+    """
+    tg_id = message.from_user.id
+    await _record_consultation(message, state, text)
+
+    if wait:
+        await support.set_mode(tg_id, "waiting")
+
+    async with session_scope() as s:
+        history = await repo.get_chat_history(s, tg_id, limit=8)
+        th = await support.get_thread(s, tg_id)
+
+    # Guruhdagi mavzuga ham belgi — admin qaysi suhbat ekanini darhol ko'radi.
+    await support.notify(message.bot, tg_id, f"⚠️ <b>{escape(reason)}</b>")
+    await report.escalation(
+        tg_id=tg_id,
+        who=support.title_of(message.from_user),
+        reason=reason,
+        history=history,
+        topic_id=th.topic_id if th else None,
+        waiting=wait,
     )
-    await notify_admins(message.bot, body)
-    await report.send(body)
-    # Operator guruhida bu bemorning mavzusiga ham belgi qo'yiladi — admin
-    # aynan qaysi suhbatga kirishni bilishi uchun.
-    await support.notify(
-        message.bot, message.from_user.id, f"⚠️ <b>{escape(reason)}</b> — odam kerak."
-    )
 
 
-# ═══════════════════ Operator guruhi (jonli admin) ═══════════════════
+# ═══════════════════ Operator guruhi (boshqa admin) ═══════════════════
 # Guruhda bot faqat o'z mavzularini kuzatadi. Admin mavzuga yozgan matn
 # to'g'ridan-to'g'ri bemorga ketadi va AI `HUMAN_PAUSE_MINUTES` ga jim
 # bo'ladi.

@@ -174,7 +174,7 @@ def asks_location(text: str) -> bool:
 
 
 # Model bemorni tushunmaganini aytdi — javob mijozga ketaveradi, lekin
-# suhbat jonli adminga uzatiladi (shifokorning talabi: noaniq xabarni
+# suhbat boshqa adminga uzatiladi (shifokorning talabi: noaniq xabarni
 # odam ko'rsin).
 _UNCLEAR_RE = re.compile(
     r"tushunmadim|tushunolmadim|tushunarsiz|aniqroq (qilib )?(yoz|ayt)|"
@@ -185,6 +185,26 @@ _UNCLEAR_RE = re.compile(
 
 def is_unclear(reply: str) -> bool:
     return bool(_UNCLEAR_RE.search(reply or ""))
+
+
+# Bemor odam bilan gaplashmoqchi. Bu YAGONA holat bo'lib, unda AI o'zi
+# suhbatni to'xtatib boshqa adminga uzatadi — qolgan hollarda taklif
+# qilmasligi kerak (shifokorning talabi). Modelga ishonib bo'lmaydi:
+# u «hozir xabar beraman» deb yozardi-yu, hech qanday signal ketmasdi.
+# Shuning uchun savolning o'zi kodda aniqlanadi.
+_HUMAN_ASK_RE = re.compile(
+    # «… bilan gaplashmoqchiman» — eng keng tarqalgan shakl
+    r"(odam|admin\w*|operator\w*|shifokor\w*|doktor\w*|o'?zi\w*)\s+bilan\s+gaplash|"
+    r"tirik odam|jonli\s*(odam|operator|admin)|operator|boshqa admin|"
+    r"admin(ni|ga|iz|)\s*(chaqir|ula|ulan|bog'?la|kerak)|"
+    r"odamga ulan|odamga bog'?la|o'?zingiz javob ber|"
+    r"человек|оператор|живой|с админом|администратор",
+    re.IGNORECASE,
+)
+
+
+def asks_human(text: str) -> bool:
+    return bool(_HUMAN_ASK_RE.search(text or ""))
 
 
 # ─────────────────────────── Til va alifbo ───────────────────────────
@@ -314,7 +334,7 @@ async def chat(
 # ─────────────────────────── Ovozli xabar → matn ───────────────────────────
 # Shifokorning qarori: ovozli xabar matnga o'girilsa AI unga darhol javob
 # beradi. O'girib bo'lmasa — bemordan yozib yuborish so'raladi va suhbat
-# jonli adminga uzatiladi. Rasm esa O'QILMAYDI: shifokor masofadan turib
+# boshqa adminga uzatiladi. Rasm esa O'QILMAYDI: shifokor masofadan turib
 # tashxis qo'ymaydi, rasm shunchaki unga yetkaziladi.
 _TRANSCRIBE_PROMPT = """
 Bu ovozli xabarni so'zma-so'z matnga o'gir. Xabar o'zbek (lotin yoki kirill)

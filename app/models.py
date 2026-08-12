@@ -197,17 +197,22 @@ class SupportThread(Base):
     """Operator guruhidagi mavzu (topic) — har bemorga bittadan.
 
     Nima uchun kerak: Telegramda bir vaqtda bir necha bemor yozadi. Agar
-    hammasi bitta oqimga tushsa, jonli admin kim nima yozganini ajrata
+    hammasi bitta oqimga tushsa, admin kim nima yozganini ajrata
     olmaydi. Shuning uchun guruh «forum» rejimida ishlaydi va har bemorning
     suhbati o'z mavzusida jonli ko'chib boradi. Admin o'sha mavzuga yozsa —
     javob bemorga ketadi.
 
-    `mode`:
-      • `ai`    — odatdagi holat, javobni AI yozadi;
-      • `human` — suhbatga odam aralashdi, AI jim turadi.
+    `mode` — uchta holat:
+      • `ai`      — odatdagi holat, javobni AI yozadi;
+      • `waiting` — bemor boshqa admin so'radi (yoki AI javob berolmadi):
+        signal yuborildi, admin javobi kutilyapti, AI jim;
+      • `human`   — admin javob berdi, AI `HUMAN_PAUSE_MINUTES` jim turadi.
 
-    AI `HUMAN_PAUSE_MINUTES` (odatda 60 daqiqa) o'tgach o'zi qaytadi:
-    shifokorning qarori — admin unutib qo'ysa ham bemor javobsiz qolmasin.
+    Ikkala pauza ham o'zi tugaydi — bemor javobsiz qolmasligi kerak:
+      • `waiting` → `WAIT_MINUTES` (30) o'tgach AI bemorga xabar berib davom
+        etadi (`pending_notified` bilan bir marta);
+      • `human`   → `HUMAN_PAUSE_MINUTES` (60) o'tgach AI qaytadi.
+
     Odam yozgan xabarlar `chat_messages` ga `role='model'` bo'lib tushadi,
     shuning uchun qaytgan AI ular bilan tanishgan holda davom etadi.
     """
@@ -217,9 +222,13 @@ class SupportThread(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     topic_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    mode: Mapped[str] = mapped_column(String(10), default="ai")  # ai | human
-    # Oxirgi marta odam javob bergan payt — pauza shundan hisoblanadi.
+    mode: Mapped[str] = mapped_column(String(10), default="ai")  # ai | waiting | human
+    # Oxirgi marta odam javob bergan payt — 60 daqiqalik pauza shundan.
     human_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Boshqa adminga signal yuborilgan payt — 30 daqiqalik kutish shundan.
+    pending_since: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Kutish tugagach bemorga xabar yuborildimi (ikki marta yuborilmasin).
+    pending_notified: Mapped[bool] = mapped_column(Boolean, default=False)
     title: Mapped[str] = mapped_column(String(160), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 

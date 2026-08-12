@@ -29,6 +29,10 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 # hajmi uchun ortiqcha: yiliga bir-ikki ustun qo'shiladi.
 _MIGRATIONS: dict[str, dict[str, str]] = {
     "chat_messages": {"archived_at": "TIMESTAMP"},
+    "support_threads": {
+        "pending_since": "TIMESTAMP",
+        "pending_notified": "BOOLEAN DEFAULT FALSE",
+    },
 }
 
 

@@ -193,7 +193,7 @@ Shunday yoz: «Uzr, savolingizni to'liq tushunmadim. Biroz aniqroq yozib
 bera olasizmi?» Bu javobdan keyin boshqa hech narsa qo'shma.
 
 SUHBATGA ODAM ARALASHGAN BO'LSA
-Suhbat tarixida sening javoblaring qatorida jonli adminning yoki
+Suhbat tarixida sening javoblaring qatorida boshqa adminning yoki
 shifokorning o'z javoblari ham bo'lishi mumkin. Ularni diqqat bilan o'qi:
   • aytilgan gapni qaytadan aytma va ziddini yozma;
   • odam bergan va'dani («qo'ng'iroq qilamiz», «ko'rib chiqamiz»,
@@ -202,12 +202,14 @@ shifokorning o'z javoblari ham bo'lishi mumkin. Ularni diqqat bilan o'qi:
     yangi savolga javob ber, boshidan boshlama;
   • «men bunga javob berolmayman» dema — suhbat oddiy tarzda davom etadi.
 
-JONLI ODAMNI O'ZING TAKLIF QILMA
-«Adminga ulayman», «operatorga bog'layman», «shifokorga yozib qo'yaman»
-deb sen taklif qilmaysan — bemor buni so'ramagan. Bemor o'zi «odam bilan
-gaplashmoqchiman», «adminni chaqiring», «shifokorning o'zi javob bersin»
-desa — qarshilik qilma: «Xo'p, hozir xabar berdim — tez orada javob
-berishadi» de va suhbatni davom ettiraver.
+BOSHQA ADMINNI O'ZING TAKLIF QILMA
+«Boshqa adminga ulayman», «operatorga bog'layman», «shifokorga yozib
+qo'yaman» deb sen taklif qilmaysan — bemor buni so'ramagan. Bemor o'zi
+so'rasa, ulash haqidagi xabarni dastur o'zi yuboradi — sen bu haqda
+o'zingdan gap ochma va va'da berma.
+
+Odam haqida gapirganda «jonli admin», «operator» dema — **«boshqa admin»**
+de. Masalan: «Sizni boshqa adminga ulayapman.»
 
 SHOSHILINCH HOLAT
 Bemor quyidagilarni aytsa — boshqa hech narsa yozma, darhol shifokorga
@@ -242,6 +244,22 @@ GREETING = (
     "Assalomu alaykum! Dr. Asror To'rayev qabulxonasiga murojaatingiz uchun "
     "rahmat, men shifokorning adminiman.\n\n"
     "Ayting-chi, qanday masala bo'yicha savolingiz bor edi?"
+)
+
+# Bemor odamni so'raganda (`ai.asks_human`). Modelga bormaydi: model
+# «hozir xabar beraman» deb yozardi-yu, hech qanday signal ketmasdi.
+HANDOFF = (
+    "Xo'p, sizni boshqa adminga ulayapman. Biroz kutib turing — "
+    "xabaringizni ko'rishi bilan javob berishadi."
+)
+
+# Boshqa admin belgilangan vaqt ichida javob bermasa — bemor javobsiz
+# qolmasligi kerak (shifokorning qarori). Faqat Telegramda yuboriladi.
+HANDOFF_TIMEOUT = (
+    "Boshqa adminga xabar yuborildi — buni ko'rishi bilan sizga bog'lanadi.\n\n"
+    "Istasangiz telefon raqamingizni yozib qoldiring, o'zlari qo'ng'iroq "
+    "qilishadi. Yoki boshqa savolingiz bo'lsa, bemalol yozavering — "
+    "men javob beraman."
 )
 
 # Shoshilinch holat aniqlanganda — modelga umuman bormaydi (`ai.is_urgent`).
