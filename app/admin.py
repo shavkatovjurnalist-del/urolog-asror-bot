@@ -36,8 +36,9 @@ def check_token(appt_id: int, action: str, token: str) -> bool:
     return hmac.compare_digest(make_token(appt_id, action), token or "")
 
 
-def make_esc_token(tg_id: int, action: str) -> str:
-    msg = f"esc:{tg_id}:{action}".encode()
+def make_esc_token(key: int | str, action: str) -> str:
+    """Signal tugmalari uchun imzo. `key` — «kanal:foydalanuvchi»."""
+    msg = f"esc:{key}:{action}".encode()
     return hmac.new(WEBHOOK_SECRET.encode(), msg, hashlib.sha256).hexdigest()[:32]
 
 
@@ -72,8 +73,13 @@ ESC_ACTIONS = {"me", "ai"}
 
 
 @router.get("/esc")
-async def escalation_action(tg: int, action: str, token: str = "") -> HTMLResponse:
+async def escalation_action(
+    action: str, user: str = "", ch: str = "tg", tg: int | None = None, token: str = ""
+) -> HTMLResponse:
     """«Javob beraman» / «AI davom ettirsin» tugmalari shu yerga tushadi.
+
+    Ikkala kanal uchun ham shu yo'l: `ch=tg` — bu servisning o'z bazasi,
+    `ch=ig` — Instagram tizimining bazasi (`app/ig_bridge.py`).
 
     Nima uchun tugma callback emas, havola: signal @ai_humoyunbot orqali
     ketadi, uning webhook'i esa boshqa loyihaga ulangan — callback'ni bu
@@ -81,43 +87,55 @@ async def escalation_action(tg: int, action: str, token: str = "") -> HTMLRespon
     """
     if action not in ESC_ACTIONS:
         raise HTTPException(400, "Noma'lum amal")
-    if not hmac.compare_digest(make_esc_token(tg, action), token or ""):
+    if ch not in {"tg", "ig"}:
+        raise HTTPException(400, "Noma'lum kanal")
+
+    uid = user or (str(tg) if tg is not None else "")
+    if not uid:
+        raise HTTPException(400, "Foydalanuvchi ko'rsatilmagan")
+    if not hmac.compare_digest(make_esc_token(f"{ch}:{uid}", action), token or ""):
         raise HTTPException(403, "Imzo noto'g'ri")
 
-    from app import support
-    from app.bot.instance import bot
     from app.config import HUMAN_PAUSE_MINUTES
 
+    if ch == "ig":
+        return await _esc_instagram(uid, action, HUMAN_PAUSE_MINUTES)
+    return await _esc_telegram(int(uid), action, HUMAN_PAUSE_MINUTES)
+
+
+async def _esc_telegram(tg_id: int, action: str, pause: int) -> HTMLResponse:
+    from app import support
+    from app.bot.instance import bot
+
     async with SessionLocal() as s:
-        th = await support.get_thread(s, tg)
+        th = await support.get_thread(s, tg_id)
         already = th.mode if th else None
 
     if action == "me":
-        await support.set_mode(tg, "human")
+        await support.set_mode(tg_id, "human")
         await support.notify(
-            bot, tg, "✋ <b>Admin javob beradi</b> — AI bu suhbatda jim turadi."
+            bot, tg_id, "✋ <b>Admin javob beradi</b> — AI bu suhbatda jim turadi."
         )
         return _page(
             "Sizga topshirildi",
             f'<div class="ico">✋</div><h1>Javobni siz yozasiz</h1>'
-            f"<p>AI bu bemorga {HUMAN_PAUSE_MINUTES} daqiqa javob bermaydi. "
+            f"<p>AI bu bemorga {pause} daqiqa javob bermaydi. "
             f"Guruhdagi mavzuga yozgan xabaringiz bemorga boradi.</p>",
             "#b8860b",
         )
 
-    # action == "ai" — AI suhbatni davom ettiradi
-    await support.set_mode(tg, "ai")
-    await support.notify(bot, tg, "🤖 <b>AI davom ettiradi</b> — pauza bekor qilindi.")
+    await support.set_mode(tg_id, "ai")
+    await support.notify(bot, tg_id, "🤖 <b>AI davom ettiradi</b> — pauza bekor qilindi.")
     sent = False
     try:
         await bot.send_message(
-            tg,
+            tg_id,
             "Rahmat, kutganingiz uchun. Savolingizni davom ettiraylik — "
             "yana nimani bilmoqchi edingiz?",
         )
         sent = True
     except Exception as e:
-        log.warning("Bemorga (%s) davom xabari ketmadi: %s", tg, e)
+        log.warning("Bemorga (%s) davom xabari ketmadi: %s", tg_id, e)
 
     note = (
         "Bemorga suhbat davom etayotgani haqida xabar yuborildi."
@@ -129,6 +147,39 @@ async def escalation_action(tg: int, action: str, token: str = "") -> HTMLRespon
     return _page(
         "AI davom ettiradi",
         f'<div class="ico">🤖</div><h1>AI javob berishda davom etadi</h1><p>{note}</p>',
+        "#007a70",
+    )
+
+
+async def _esc_instagram(user_id: str, action: str, pause: int) -> HTMLResponse:
+    """Instagram tomonida bu servisning bemorga to'g'ridan-to'g'ri yo'li yo'q.
+
+    Shuning uchun faqat rejim o'zgartiriladi: javobni admin Instagram'ning
+    o'z suhbatidan yozadi. AI davom etganda ham xabarni mijoz keyingi marta
+    yozganda n8n beradi — Instagramda javobsiz xabar yuborilmaydi.
+    """
+    from app import ig_bridge
+
+    if not ig_bridge.enabled():
+        raise HTTPException(503, "Instagram bazasi ulanmagan")
+
+    if action == "me":
+        await ig_bridge.set_mode(user_id, "human")
+        return _page(
+            "Sizga topshirildi",
+            f'<div class="ico">✋</div><h1>Javobni siz yozasiz</h1>'
+            f"<p>AI bu mijozga {pause} daqiqa javob bermaydi. "
+            f"Instagramdagi suhbatga o'zingiz yozing — tizim buni sezadi "
+            f"va AI jim turaveradi.</p>",
+            "#b8860b",
+        )
+
+    await ig_bridge.set_mode(user_id, "ai")
+    return _page(
+        "AI davom ettiradi",
+        '<div class="ico">🤖</div><h1>AI javob berishda davom etadi</h1>'
+        "<p>Kutish bekor qilindi. Mijoz keyingi marta yozganda AI odatdagidek "
+        "javob beradi — Instagramda javobsiz xabar yuborilmaydi.</p>",
         "#007a70",
     )
 

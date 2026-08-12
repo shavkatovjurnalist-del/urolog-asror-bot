@@ -193,6 +193,24 @@ class ChatMessage(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Setting(Base):
+    """Ish vaqtida o'zgaradigan sozlamalar — `.env` dan farqli.
+
+    Hozircha bittasi uchun kerak: `ai_paused` — AI operator botiga «404»
+    yozilganda AI butunlay to'xtaydi, «101» da qaytadi. Buni env bilan
+    qilib bo'lmaydi: env o'zgarishi servisni qayta ishga tushirishni
+    talab qiladi, favqulodda to'xtatish esa shu zahoti kerak.
+    """
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class SupportThread(Base):
     """Operator guruhidagi mavzu (topic) — har bemorga bittadan.
 

@@ -132,14 +132,19 @@ def _summary(history: list[dict], limit: int = 3) -> str:
 
 
 async def escalation(
-    tg_id: int,
+    tg_id: int | str,
     who: str,
     reason: str,
     history: list[dict],
     topic_id: int | None,
     waiting: bool,
+    channel: str = "tg",
 ) -> None:
-    """«Boshqa admin kerak» signali — ikkita tugma va mavzuga havola bilan.
+    """«Boshqa admin kerak» signali — ikkita tugma bilan.
+
+    Ikkala kanal (Telegram va Instagram) uchun ham shu funksiya ishlatiladi,
+    shuning uchun xabar ko'rinishi bir xil. Farq bittada: mavzuga havola
+    faqat Telegramda bo'ladi — Instagram suhbatiga havola yo'q.
 
     `waiting=True` bo'lsa AI bemorga javob bermay javob kutyapti; admin
     tugmani bosmasa muddat tugab AI o'zi davom etadi.
@@ -148,7 +153,12 @@ async def escalation(
     from app.config import BASE_URL, WAIT_MINUTES
     from app.support import topic_link
 
-    head = "🔔 <b>BOSHQA ADMIN KERAK</b>" if waiting else "🔔 <b>DIQQAT TALAB QILADI</b>"
+    where = "Instagram" if channel == "ig" else "Telegram"
+    head = (
+        f"🔔 <b>BOSHQA ADMIN KERAK</b> ({where})"
+        if waiting
+        else f"🔔 <b>DIQQAT TALAB QILADI</b> ({where})"
+    )
     body = (
         f"{head}\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -162,9 +172,13 @@ async def escalation(
             f"ichida tanlamasangiz, AI o'zi davom ettiradi."
         )
 
-    me = f"{BASE_URL}/admin/esc?tg={tg_id}&action=me&token={make_esc_token(tg_id, 'me')}"
-    ai_ = f"{BASE_URL}/admin/esc?tg={tg_id}&action=ai&token={make_esc_token(tg_id, 'ai')}"
-    link = topic_link(topic_id)
+    key = f"{channel}:{tg_id}"
+    me = (f"{BASE_URL}/admin/esc?ch={channel}&user={tg_id}&action=me"
+          f"&token={make_esc_token(key, 'me')}")
+    ai_ = (f"{BASE_URL}/admin/esc?ch={channel}&user={tg_id}&action=ai"
+           f"&token={make_esc_token(key, 'ai')}")
+    # Instagram suhbatiga havola yo'q — u yerda mavzu tushunchasi ham yo'q.
+    link = topic_link(topic_id) if channel == "tg" else ""
 
     rows_web = [[
         {"text": "✋ Javob beraman", "web_app": {"url": me}},

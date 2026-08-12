@@ -640,14 +640,26 @@ async def _handle_patient_text(
         await _escalate(message, state, "🚨 SHOSHILINCH", text)
         return
 
-    # 2. Suhbatga odam aralashgan yoki javobi kutilayotgan bo'lsa AI jim
+    # 2. AI butunlay to'xtatilganmi (operator botidagi kod 404).
+    #    Xabar guruhga tushaveradi — javobni odam yozadi, bemor
+    #    e'tibordan chetda qolmaydi.
+    if await repo.ai_paused():
+        async with session_scope() as s:
+            await repo.add_chat_message(s, tg_id, "user", text, flags="ai_toxtatilgan")
+        await support.notify(
+            message.bot, tg_id,
+            "⛔️ <i>AI to'xtatilgan (kod 404) — javobni shu yerdan yozing.</i>",
+        )
+        return
+
+    # 3. Suhbatga odam aralashgan yoki javobi kutilayotgan bo'lsa AI jim
     #    turadi. Ikkala muddat ham o'zi tugaydi (`support.is_paused`).
     if await support.is_paused(tg_id):
         async with session_scope() as s:
             await repo.add_chat_message(s, tg_id, "user", text, flags="odam_rejimi")
         return
 
-    # 3. Bemor odamni so'radi — AI o'zi to'xtaydigan yagona holat.
+    # 4. Bemor odamni so'radi — AI o'zi to'xtaydigan yagona holat.
     #    Modelga ishonib bo'lmaydi: u «hozir xabar beraman» deb yozardi-yu,
     #    hech qanday signal ketmasdi (Bobur sinovda topdi).
     if ai.asks_human(text):
@@ -661,7 +673,7 @@ async def _handle_patient_text(
         await _escalate(message, state, "Bemor boshqa admin so'radi", text, wait=True)
         return
 
-    # 4. Suhbat tarixi bilan modelga
+    # 5. Suhbat tarixi bilan modelga
     async with session_scope() as s:
         history = await repo.get_chat_history(s, tg_id, limit=ai.HISTORY_LIMIT)
         await repo.add_chat_message(s, tg_id, "user", text)
@@ -683,12 +695,12 @@ async def _handle_patient_text(
     await message.answer(reply, reply_markup=kb.live_chat_kb())
     await support.relay_ai(message.bot, tg_id, reply)
 
-    # 4. Manzil so'ralgan bo'lsa — xaritadagi nuqta. Shifokorning talabi:
+    # 6. Manzil so'ralgan bo'lsa — xaritadagi nuqta. Shifokorning talabi:
     #    manzil matn bilan tasvirlanmasin, bemor joylashuvni bosib ko'rsin.
     if ai.asks_location(text):
         await _send_clinic_location(message)
 
-    # 5. Boshqa admin ko'rishi kerak bo'lgan holatlar.
+    # 7. Boshqa admin ko'rishi kerak bo'lgan holatlar.
     #    Oddiy suhbat uchun signal YUBORILMAYDI — u guruhdagi mavzuda
     #    baribir jonli ko'rinib turadi. Ilgari har yangi bemor signal
     #    bo'lib ketardi va bu shovqin edi.

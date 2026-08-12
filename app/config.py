@@ -48,9 +48,23 @@ HUMAN_PAUSE_MINUTES: int = int(os.getenv("HUMAN_PAUSE_MINUTES", "60"))
 # — bemor javobsiz qolib ketmasin.
 WAIT_MINUTES: int = int(os.getenv("WAIT_MINUTES", "30"))
 
+# Instagram tizimining bazasi (n8n bilan umumiy, `bot` sxemasi).
+# Kerak: Instagram signallarini ham shu servis yuboradi — xabar ko'rinishi
+# va tugmalari ikkala kanalda bir xil bo'lsin. Bo'sh bo'lsa Instagram
+# tomoni umuman qo'shilmaydi va bot avvalgidek ishlaydi.
+_ig = os.getenv("IG_DATABASE_URL", "").strip()
+if _ig.startswith("postgres://"):
+    _ig = _ig.replace("postgres://", "postgresql://", 1)
+if "?" in _ig:  # asyncpg `sslmode` ni tushunmaydi — TLS alohida beriladi
+    _ig = _ig.partition("?")[0]
+IG_DATABASE_URL: str = _ig
+
 BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "secret")
 WEBHOOK_PATH: str = f"/webhook/{WEBHOOK_SECRET}"
+# AI operator boti (@ai_humoyunbot) — boshqaruv buyruqlari shu yerga tushadi.
+# Alohida yo'l: ikkala bot bitta servisda, lekin update'lari aralashmaydi.
+REPORT_WEBHOOK_PATH: str = f"/webhook/op/{WEBHOOK_SECRET}"
 PORT: int = int(os.getenv("PORT", "8000"))
 
 WEBAPP_URL: str = f"{BASE_URL}/app/"

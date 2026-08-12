@@ -119,6 +119,52 @@ async def get_chat_history(s: AsyncSession, tg_id: int, limit: int = 14) -> list
     return [{"role": m.role, "text": m.text} for m in reversed(rows)]
 
 
+# ─────────────────────── Ish vaqtidagi sozlamalar ───────────────────────
+# AI ni to'xtatish/qaytarish (kod 404 / 101). Kesh: har xabarda bazaga
+# borilmasin, lekin to'xtatish 30 soniyadan ko'p kechikmasin.
+_flag_cache: dict[str, tuple[float, str]] = {}
+_FLAG_TTL = 30.0
+
+
+async def get_setting(key: str, default: str = "") -> str:
+    import time
+
+    hit = _flag_cache.get(key)
+    if hit and time.time() - hit[0] < _FLAG_TTL:
+        return hit[1]
+    from app.db import SessionLocal
+    from app.models import Setting
+
+    try:
+        async with SessionLocal() as s:
+            row = await s.get(Setting, key)
+            val = row.value if row else default
+    except Exception:  # baza yetib bo'lmasa bot ishlashda davom etsin
+        return hit[1] if hit else default
+    _flag_cache[key] = (time.time(), val)
+    return val
+
+
+async def set_setting(key: str, value: str) -> None:
+    import time
+
+    from app.db import SessionLocal
+    from app.models import Setting
+
+    async with SessionLocal() as s:
+        row = await s.get(Setting, key)
+        if row is None:
+            s.add(Setting(key=key, value=value))
+        else:
+            row.value = value
+        await s.commit()
+    _flag_cache[key] = (time.time(), value)
+
+
+async def ai_paused() -> bool:
+    return (await get_setting("ai_paused", "false")) == "true"
+
+
 async def has_open_chat(s: AsyncSession, tg_id: int) -> bool:
     """Yakunlanmagan jonli suhbat bormi.
 
