@@ -149,9 +149,16 @@ def is_urgent(text: str) -> bool:
 # uchun bu darhol shifokorga uzatilmaydi — faqat `chat_messages.flags` ga
 # `narx` deb belgilanadi. Suhbat yakunlanganda yozuv baribir shifokorga ketadi,
 # ya'ni kim narx so'raganini keyin ham ko'rish mumkin.
+# «qancha» — eng keng tarqalgan narx savoli, lekin u vaqt haqida ham
+# bo'lishi mumkin («qancha vaqt davom etadi»). Shuning uchun o'lchov
+# so'zlari bilan kelgani hisobga olinmaydi. 2026-08-12 gacha bu yerda
+# faqat «qancha turadi» bor edi va oddiy «konsultatsiya qancha?» savoli
+# narx so'rovi deb tanilmasdi.
 _PRICE_ASK_RE = re.compile(
-    r"narx|nark|qancha turadi|qancha bo'?ladi|necha pul|qanchadan|puli qancha|"
-    r"\bqimmat|arzon|цена|стоит|стоимость|сколько сто",
+    r"narx|nark|necha pul|qanchadan|puli qancha|"
+    r"\bqancha\b(?!\s*(?:vaqt|kun|soat|oy|yil|kunlik|daqiqa|marta|kishi|odam|"
+    r"muddat|davom))|"
+    r"\bqimmat|arzon|цена|стоит|стоимость|сколько",
     re.IGNORECASE,
 )
 
@@ -264,8 +271,25 @@ def language_hint(text: str) -> str:
     )
 
 
-def guard(text: str) -> tuple[str, list[str]]:
-    """Yakuniy to'siq. Qaytaradi: (javob, buzilgan qoidalar ro'yxati)."""
+def _strip_prices(text: str) -> str:
+    """Narx aytilgan gaplarni olib tashlaydi, qolganini saqlaydi."""
+    parts = re.split(r"(?<=[.!?])\s+", text)
+    kept = [p for p in parts if not _PRICE_ITEM_RE.search(p)]
+    return " ".join(kept).strip()
+
+
+# Bemor narx so'ramaganda beriladigan javob (hammasi narx bo'lib chiqsa).
+_ASK_WHAT = "Bu haqda aniq nimani bilmoqchi edingiz?"
+
+
+def guard(text: str, price_asked: bool = True) -> tuple[str, list[str]]:
+    """Yakuniy to'siq. Qaytaradi: (javob, buzilgan qoidalar ro'yxati).
+
+    `price_asked=False` — bemor narx so'ramagan. Model buni tez-tez
+    buzadi: «varikosele» degan bitta so'zga ham narxni qo'shib yuboradi
+    (2026-08-12 da tekshirilgan). Promptdagi qoida yetmadi, shuning uchun
+    narx aytilgan GAPLAR javobdan olib tashlanadi — qolgan matn saqlanadi.
+    """
     hits: list[str] = []
     text = _clean(text)
 
@@ -275,7 +299,11 @@ def guard(text: str) -> tuple[str, list[str]]:
 
     if len(_PRICE_ITEM_RE.findall(text)) > _PRICE_LIST_LIMIT:
         hits.append("narx_royxati")
-        text = _PRICE_LIST_REPLY
+        return _PRICE_LIST_REPLY, hits
+
+    if not price_asked and _PRICE_ITEM_RE.search(text):
+        hits.append("soralmagan_narx")
+        text = _strip_prices(text) or _ASK_WHAT
 
     return text, hits
 
@@ -356,7 +384,7 @@ async def chat(
         if not raw.strip():
             return None, ["bosh_matn"]
 
-        return guard(raw)
+        return guard(raw, price_asked=asks_price(user_text))
     except Exception as e:
         log.warning("Gemini xatosi: %s", e)
         return None, ["xato"]

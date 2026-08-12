@@ -47,8 +47,10 @@ CASES: list[tuple[str, str, dict]] = [
      {"must": [r"09[:.]00", r"16[:.]00"], "any": [r"dushanba", r"juma"],
       "never": [r"19[:.]00", r"shanbagacha"]}),
     ("shanba", "shanba kuni ishlaysizmi?",
-     # «never» yo'q: «...gacha ishlaymiz» ichida «ha ishla» yolg'on ushlanardi
-     {"any": [r"yo'?q", r"dam olish"]}),
+     # «never» yo'q: «...gacha ishlaymiz» ichida «ha ishla» yolg'on ushlanardi.
+     # Javob ikki xil bo'lishi mumkin: «dam olish kuni» yoki darhol ish
+     # kunini tavsiya qilish — ikkalasi ham to'g'ri.
+     {"any": [r"yo'?q", r"dam olish", r"dushanba", r"juma", r"ish kun"]}),
     ("telefon", "telefon raqamingizni bering",
      {"must": [r"90\s*008\s*38\s*78"]}),
     ("boshqa shahar", "toshkentga kelasizmi?",
@@ -159,6 +161,12 @@ CASES: list[tuple[str, str, dict]] = [
      {"never": [PRICE], "any": [r"ha", r"qilamiz", r"qilinadi"]}),
     ("so'ralmagan narx 2", "penil protez qo'yish qancha vaqt davom etadi?",
      {"never": [r"29", r"168"]}),
+    # Bitta so'zli xabar ham narx savoli emas. Model buni narx so'rovi deb
+    # tushunib, darhol summani aytardi (Bobur 2026-08-12 da topdi).
+    ("bitta so'z — narxsiz", "varikosele",
+     {"never": [PRICE], "any": [r"nimani bilmoqchi", r"moyak", r"vena", r"qanday"]}),
+    ("bitta so'z — narxsiz 2", "sunnat",
+     {"never": [PRICE]}),
 
     # ---------- Shanba ----------
     ("shanba kelmoqchi", "shanba kuni qabulga borsam bo'ladimi?",
@@ -277,6 +285,24 @@ HUMAN_ASK_NO = [
 
 # Til aniqlash (`ai.language_hint`) — modelsiz. Tibbiy atamalar ikkala
 # tilda bir xil yozilishi mumkin, chegara aynan shu yerda buzilgan edi.
+# Narx savolini tanish (`ai.asks_price`) — bundan `guard` ning narxni
+# kesish qarori ham kelib chiqadi, shuning uchun xatosi qimmatga tushadi.
+PRICE_ASK_YES = [
+    "takroriy konsultatsiya qancha?",
+    "konsultatsiya qancha",
+    "varikosele qancha",
+    "qancha turadi",
+    "narxi qancha",
+    "сколько стоит операция",
+]
+PRICE_ASK_NO = [
+    "operatsiya qancha vaqt davom etadi",
+    "necha kun yotaman",
+    "qancha kun dam olaman",
+    "varikosele",
+    "qancha marta kelishim kerak",
+]
+
 LANG_UZ = [
     "Ассалому алайкум, иш вақтингиз қачон?",
     "Варикоцеле операцияси қанча туради?",
@@ -300,6 +326,19 @@ PRICE_LIST_BLOCK = [
     "HoLEP 13-16 million so'm, TUR 9-10 million so'm, PCNL 7-15 million so'm, "
     "buyrak operatsiyalari 10-30 million so'm, uretra plastikasi 20-30 million so'm.",
 ]
+# Narx SO'RALMAGANDA javobdan narx gaplari olib tashlanadi (`price_asked=False`).
+PRICE_STRIP = [
+    (
+        "Mikroskopik Marmar usulida bir tomonlama varikotsele 3 million so'm, "
+        "ikki tomonlama 5 million so'm. Operatsiya 40 daqiqa davom etadi.",
+        "Operatsiya 40 daqiqa davom etadi.",
+    ),
+    (
+        "Sunnat 1 500 000 so'm turadi.",
+        "Bu haqda aniq nimani bilmoqchi edingiz?",  # hammasi narx — savol qaytadi
+    ),
+]
+
 # Bular o'tishi kerak — bitta yoki ikkita xizmat narxi ro'yxat emas.
 PRICE_LIST_OK = [
     "Bir tomonlama bo'lsa 3 million so'm, ikki tomonlama bo'lsa 5 million.",
@@ -357,6 +396,20 @@ async def run_suite(only: str | None, verbose: bool, delay: float) -> int:
           f"{total_human - human_fails}/{total_human}\n")
     urgent_fails += human_fails
 
+    price_ask_fails = 0
+    for q in PRICE_ASK_YES:
+        if not ai.asks_price(q):
+            print(f"❌ narx savoli ANIQLANMADI: «{q}»")
+            price_ask_fails += 1
+    for q in PRICE_ASK_NO:
+        if ai.asks_price(q):
+            print(f"❌ narx savoli YOLG'ON ishladi: «{q}»")
+            price_ask_fails += 1
+    total_pa = len(PRICE_ASK_YES) + len(PRICE_ASK_NO)
+    print(f"{'✅' if not price_ask_fails else '❌'} narx savolini tanish: "
+          f"{total_pa - price_ask_fails}/{total_pa}\n")
+    urgent_fails += price_ask_fails
+
     lang_fails = 0
     for q in LANG_UZ:
         if "KIRILL" not in ai.language_hint(q):
@@ -382,7 +435,19 @@ async def run_suite(only: str | None, verbose: bool, delay: float) -> int:
         if "narx_royxati" in hits:
             print(f"❌ oddiy narx javobi YOLG'ON to'sildi: «{txt[:60]}…»")
             guard_fails += 1
-    total_guard = len(PRICE_LIST_BLOCK) + len(PRICE_LIST_OK)
+    for src, want in PRICE_STRIP:
+        out, hits = ai.guard(src, price_asked=False)
+        if out != want or "soralmagan_narx" not in hits:
+            print(f"❌ so'ralmagan narx kesilmadi: «{out[:60]}»")
+            guard_fails += 1
+    # Narx so'ralgan bo'lsa tegilmasligi kerak
+    for src, _ in PRICE_STRIP:
+        out, hits = ai.guard(src, price_asked=True)
+        if "soralmagan_narx" in hits:
+            print(f"❌ so'ralgan narx YOLG'ON kesildi: «{src[:50]}»")
+            guard_fails += 1
+
+    total_guard = len(PRICE_LIST_BLOCK) + len(PRICE_LIST_OK) + len(PRICE_STRIP) * 2
     print(f"{'✅' if not guard_fails else '❌'} narx ro'yxati to'sig'i: "
           f"{total_guard - guard_fails}/{total_guard}\n")
     urgent_fails += guard_fails
