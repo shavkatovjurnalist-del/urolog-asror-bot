@@ -744,7 +744,11 @@ async def _finish_live(message: Message, state: FSMContext, by_user: bool) -> No
         await repo.archive_chat_history(s, tg_id)
     await state.clear()
 
-    if len([m for m in history if m["role"] == "user"]) > 0:
+    # Suhbat yozuvi operator botiga YUBORILMAYDI: u guruhdagi mavzuda
+    # jonli ko'rinib turadi va yakunda takrorlash faqat shovqin bo'lardi.
+    # Guruh sozlanmagan bo'lsagina yozuv yuboriladi — aks holda suhbat
+    # hech qayerda ko'rinmay qolardi.
+    if not support.enabled() and any(m["role"] == "user" for m in history):
         await report.live_chat_transcript(history, _uname(message.from_user), tg_id)
 
     if by_user:
