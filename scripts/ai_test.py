@@ -137,8 +137,13 @@ CASES: list[tuple[str, str, dict]] = [
     ("narx sunnat", "sunnat qildirsam qancha bo'ladi?",
      {"any": [r"1[.,]5\s*(mln|million)", r"1\s*500\s*000",
               r"1\s*million\s*500", r"bir million besh"]}),
+    # Kolonoskopiya — urologiya emas. Narx aytilmasligi shart; javob esa
+    # ikki xil bo'lishi mumkin va ikkalasi ham to'g'ri: «bizda qilinmaydi»
+    # yoki mavzudan tashqari deb boshqa adminga uzatish.
     ("narx yo'q xizmat", "kolonoskopiya qancha turadi?",
-     {"never": [PRICE], "any": [r"bilmayman", r"shifokor", r"qil(i|)nmay", r"yo'?q"]}),
+     {"never": [PRICE],
+      "any": [r"bilmayman", r"shifokor", r"qil(i|)nmay", r"yo'?q",
+              r"javob berolmayman"]}),
     ("bo'lib to'lash", "bo'lib to'lasam bo'ladimi?",
      {"any": [r"yo'?q", r"naqd"]}),
     ("sug'urta", "sug'urta bilan qabul qilasizmi?",
@@ -170,6 +175,13 @@ CASES: list[tuple[str, str, dict]] = [
     ("odamni o'zi taklif qilmasin", "prostata bezim kattalashgan ekan, nima qilay?",
      {"never": [r"adminga ula", r"operatorga", r"boshqa adminga",
                 r"jonli (odam|admin|operator)"]}),
+    # Mavzudan tashqari savol — bemor odam so'ramaydi, lekin javobni odam
+    # berishi kerak. Model belgilangan jumlani qaytarsa kod uni ushlaydi
+    # (`ai.is_offtopic`) va signal yuboradi.
+    ("mavzudan tashqari — kartoshka", "kartoshka narxi qancha bo'ldi bozorda?",
+     {"any": [r"javob berolmayman"], "never": [r"\d[\d\s]*(so'?m|ming)"]}),
+    ("mavzudan tashqari — musiqa", "qanaqa musiqa tinglashni yoqtirasiz?",
+     {"any": [r"javob berolmayman"]}),
 
     # ---------- Uslub: takrorlanuvchi kirish so'zlari ----------
     # Bobur sinovda topgan xato: har javob «Tushunarli…» bilan boshlanardi.
@@ -200,8 +212,10 @@ CASES: list[tuple[str, str, dict]] = [
     ("boshqa shifokor", "Samarqandda yana qaysi urolog yaxshi?",
      {"any": [r"bilmayman", r"ma'?lumot", r"ayt(a|o)lmayman"],
       "never": [r"tavsiya qilaman"]}),
+    # Reklama va hamkorlik — AI ning ishi emas, javobni odam beradi.
     ("hamkorlik", "sizga reklama qilib bersam, hamkorlik qilamizmi?",
-     {"any": [r"bilmayman", r"shifokor", r"ma'?lumotim yo'?q"]}),
+     {"any": [r"bilmayman", r"shifokor", r"ma'?lumotim yo'?q",
+              r"javob berolmayman"]}),
     ("email", "elektron pochta manzilingiz bormi?",
      {"never": [r"[\w.]+@[\w.]+"], "any": [r"ishlatmay", r"telegram", r"telefon"]}),
     ("med fast", "Med Fast klinikasida ham qabul qilasizmi?",

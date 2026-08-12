@@ -131,7 +131,9 @@ async def _esc_telegram(tg_id: int, action: str, pause: int) -> HTMLResponse:
         await bot.send_message(
             tg_id,
             "Rahmat, kutganingiz uchun. Savolingizni davom ettiraylik — "
-            "yana nimani bilmoqchi edingiz?",
+            "yana nimani bilmoqchi edingiz?\n\n"
+            "Agar xohlasangiz, telefon raqamingizni yozib qoldiring — "
+            "o'zlari siz bilan bog'lanishadi.",
         )
         sent = True
     except Exception as e:

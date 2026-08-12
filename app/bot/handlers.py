@@ -707,6 +707,10 @@ async def _handle_patient_text(
     if "fallback" in flags:
         # AI javob berolmadi — bemor kutadi, javobni odam yozadi.
         await _escalate(message, state, "AI javob berolmadi", text, wait=True)
+    elif ai.is_offtopic(reply):
+        # Savol mavzudan tashqari — bemor odam so'ramagan, lekin javobni
+        # odam berishi kerak.
+        await _escalate(message, state, "Mavzudan tashqari savol", text, wait=True)
     elif ai.is_unclear(reply):
         # AI tushunmadi, lekin bemorga «aniqroq yozing» deb javob berdi —
         # suhbat davom etadi, admin faqat xabardor bo'ladi.

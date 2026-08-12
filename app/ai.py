@@ -207,6 +207,23 @@ def asks_human(text: str) -> bool:
     return bool(_HUMAN_ASK_RE.search(text or ""))
 
 
+# Savol mavzudan tashqari chiqdi — «kartoshka narxi», «qanday musiqa
+# tinglaysiz» kabi. Bemor odam so'ramaydi, lekin javobni odam berishi
+# kerak. Modelga promptda aynan shu jumla belgilangan, kod uni ushlaydi.
+# «Tashxis qo'yolmayman» bunga kirmaydi — u tibbiy chegara, mavzudan
+# chiqish emas.
+_OFFTOPIC_RE = re.compile(
+    r"savolga\s+men\s+javob\s+berolmayman|"
+    r"bu\s+savolga.{0,25}javob\s+berolmayman|"
+    r"javob\s+berolmayman[.\s]*boshqa\s+adminga",
+    re.IGNORECASE,
+)
+
+
+def is_offtopic(reply: str) -> bool:
+    return bool(_OFFTOPIC_RE.search(reply or ""))
+
+
 # ─────────────────────────── Til va alifbo ───────────────────────────
 # Promptdagi qoida yetarli emas: model kirillcha savolga lotinda javob berib
 # yuboradi. Shuning uchun alifbo kodda aniqlanib, har so'rovga aniq
