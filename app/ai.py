@@ -214,9 +214,15 @@ def asks_human(text: str) -> bool:
 _CYRILLIC_RE = re.compile(r"[Ѐ-ӿ]")
 # Faqat rus alifbosida bo'lib, o'zbek kirillida uchramaydigan harflar emas —
 # ishonchli belgi: rus tiliga xos keng tarqalgan so'zlar.
+# DIQQAT: bu yerga «операц…» kabi TIBBIY atamalarni qo'shmang — ular
+# o'zbek kirillida ham aynan shunday yoziladi («операцияси қанча туради»)
+# va bemor o'zbekcha so'raganda ruscha javob olib qolardi (2026-08-12).
+# Ishonchli belgi — rus tiliga xos olmosh va yordamchi so'zlar.
 _RUSSIAN_RE = re.compile(
-    r"\b(здравствуйте|привет|сколько|цена|где|когда|можно|спасибо|"
-    r"добрый|день|как|что|это|врач|прием|приём|записаться|операц\w*)\b",
+    r"\b(здравствуйте|привет|спасибо|пожалуйста|добрый|"
+    r"сколько|стоит|стоимость|цена|где|когда|почему|какой|какие|"
+    r"вы|вас|вам|мне|меня|мой|моя|это|очень|нужно|хочу|можно|"
+    r"врач|прием|приём|записаться|записать)\b",
     re.IGNORECASE,
 )
 
@@ -231,9 +237,13 @@ def language_hint(text: str) -> str:
             "Javobni to'liq rus tilida yoz."
         )
     return (
-        "\n\nMUHIM: bemor hozir O'ZBEK TILIDA, KIRILL ALIFBOSIDA yozdi. "
-        "Javobni ham to'liq kirill alifbosida yoz — bitta so'zni ham lotinda "
-        "qoldirma. Masalan: «Ассалому алайкум! Қандай саволингиз бор?»"
+        "\n\nMUHIM: bemor hozir O'ZBEK TILIDA, KIRILL ALIFBOSIDA yozdi.\n"
+        "Javobni TO'LIQ kirill alifbosida yoz. BILIM BAZASIDAGI faktlar lotin "
+        "alifbosida yozilgan — ularni aynan ko'chirma, KIRILLGA O'GIRIB yoz. "
+        "Javobda bitta ham lotin harfi qolmasin (raqamlar va 09:00 kabi "
+        "vaqtlar bundan mustasno).\n"
+        "Namuna: «Қабул душанбадан жумагача, соат 09:00 дан 16:00 гача. "
+        "Тушлик 13:00 – 14:00.»"
     )
 
 
@@ -273,7 +283,11 @@ async def chat(
         contents.append({"role": m["role"], "parts": [{"text": m["text"]}]})
     contents.append({"role": "user", "parts": [{"text": user_text}]})
 
-    instruction = persona.system_prompt(ctx) + language_hint(user_text)
+    # Til ko'rsatmasi IKKI joyda: promptning boshida va oxirida. Bitta joyda
+    # (oxirida) turganda model uni 16 000 belgilik kontekst ichida e'tiborsiz
+    # qoldirib, ruscha savolga o'zbekcha javob berib qo'ygan edi.
+    hint = language_hint(user_text)
+    instruction = (hint.strip() + "\n\n" if hint else "") + persona.system_prompt(ctx) + hint
     payload = {
         "systemInstruction": {"parts": [{"text": instruction}]},
         "contents": contents,

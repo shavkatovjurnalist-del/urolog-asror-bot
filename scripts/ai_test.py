@@ -208,10 +208,23 @@ CASES: list[tuple[str, str, dict]] = [
      {"never": [r"ha,? med\s*fast", r"ozod\s*sharq"], "any": [r"sintez\s*lab"]}),
 
     # ---------- Til va uslub ----------
+    # Alifbo ARALASHMASIN. Bilim bazasi lotin yozuvda, model faktni aynan
+    # ko'chirib olardi: «Қабул кунлари dushanba dan juma gacha» (2026-08-12).
+    # Eski sinov buni ko'rmasdi — u bitta kirill harf borligini tekshirardi.
     ("kirill", "Ассалому алайкум, иш вақтингиз қачон?",
-     {"must": [CYRILLIC], "any": [r"09", r"16"]}),
+     {"must": [CYRILLIC], "any": [r"09", r"16"],
+      "never": [r"\b(dushanba|juma|shanba|yakshanba|tushlik|soat|qabul|"
+                r"gacha|kunlari|dam olish)\b"]}),
+    # O'zbek kirilldagi TIBBIY atama ruscha deb tushunilmasin: «операцияси»
+    # o'zbekcha, lekin til aniqlagichi uni rus deb topib, ruscha javob
+    # berdirgan edi.
+    ("kirill operatsiya", "Варикоцеле операцияси қанча туради?",
+     {"must": [CYRILLIC], "any": [r"3", r"5"],
+      "never": [r"\bстоит\b", r"операция по", r"\bсумов\b"]}),
     ("rus", "Здравствуйте, где вы принимаете?",
      {"must": [CYRILLIC], "any": [r"Синтез|Sintez", r"Лахути|Laxuti"]}),
+    ("rus narx", "Сколько стоит операция варикоцеле?",
+     {"must": [CYRILLIC], "any": [r"3", r"5"], "never": [r"\bso'?m\b", r"million\b"]}),
     ("emoji yo'q", "salom",
      {"never": [EMOJI]}),
 ]
@@ -246,6 +259,21 @@ HUMAN_ASK_NO = [
     "qabulga yozilmoqchiman",
     "shifokor qachon javob beradi",
     "shifokor bilan qabulda gaplashamanmi",
+]
+
+# Til aniqlash (`ai.language_hint`) — modelsiz. Tibbiy atamalar ikkala
+# tilda bir xil yozilishi mumkin, chegara aynan shu yerda buzilgan edi.
+LANG_UZ = [
+    "Ассалому алайкум, иш вақтингиз қачон?",
+    "Варикоцеле операцияси қанча туради?",
+    "Қаерда қабул қиласиз?",
+    "Операциядан кейин неча кун ётаман?",
+]
+LANG_RU = [
+    "Здравствуйте, где вы принимаете?",
+    "Сколько стоит операция варикоцеле?",
+    "Можно записаться на приём?",
+    "Здравствуйте! Мне нужна консультация",
 ]
 
 # Narx ro'yxati to'sig'i (`ai.guard`) — modelsiz, tez tekshiriladi.
@@ -314,6 +342,20 @@ async def run_suite(only: str | None, verbose: bool, delay: float) -> int:
     print(f"{'✅' if not human_fails else '❌'} odam so'rovini aniqlash: "
           f"{total_human - human_fails}/{total_human}\n")
     urgent_fails += human_fails
+
+    lang_fails = 0
+    for q in LANG_UZ:
+        if "KIRILL" not in ai.language_hint(q):
+            print(f"❌ o'zbek kirill RUS deb topildi: «{q}»")
+            lang_fails += 1
+    for q in LANG_RU:
+        if "RUS TILIDA" not in ai.language_hint(q):
+            print(f"❌ rus tili ANIQLANMADI: «{q}»")
+            lang_fails += 1
+    total_lang = len(LANG_UZ) + len(LANG_RU)
+    print(f"{'✅' if not lang_fails else '❌'} til aniqlash: "
+          f"{total_lang - lang_fails}/{total_lang}\n")
+    urgent_fails += lang_fails
 
     guard_fails = 0
     for txt in PRICE_LIST_BLOCK:
