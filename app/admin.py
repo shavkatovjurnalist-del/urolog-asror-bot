@@ -98,6 +98,17 @@ async def escalation_action(
 
     from app.config import HUMAN_PAUSE_MINUTES
 
+    # Guruhdagi signal xabarining tugmalari natija yozuviga almashtiriladi —
+    # aks holda ular bosilmagandek turaverardi va ikkinchi admin qayta
+    # bosishi mumkin edi (shifokorning talabi, 2026-08-14).
+    from app import report
+    natija = ("✅ Qabul qilindi — javobni admin yozadi" if action == "me"
+              else "✅ Qabul qilindi — AI davom ettiradi")
+    try:
+        await report.signal_tugmasini_yangila(ch, uid, natija)
+    except Exception as e:
+        log.warning("Signal tugmasini yangilab bo'lmadi: %s", e)
+
     if ch == "ig":
         return await _esc_instagram(uid, action, HUMAN_PAUSE_MINUTES)
     return await _esc_telegram(int(uid), action, HUMAN_PAUSE_MINUTES)

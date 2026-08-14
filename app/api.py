@@ -371,3 +371,14 @@ async def contacts_report(key: str = "", hours: int = 12) -> dict:
         raise HTTPException(403, "Kalit noto'g'ri")
     text = await report.daily_contacts(hours=max(1, min(int(hours), 168)))
     return {"ok": True, "hours": hours, "length": len(text)}
+
+
+@router.get("/report/stats")
+async def stats_report(key: str = "", hours: int = 24) -> dict:
+    """Kun yakuni — qisqa raqamlar (22:00). Zaxira yo'l, `/report/contacts` kabi."""
+    from app.config import WEBHOOK_SECRET
+
+    if key != WEBHOOK_SECRET:
+        raise HTTPException(403, "Kalit noto'g'ri")
+    text = await report.daily_stats(hours=max(1, min(int(hours), 168)))
+    return {"ok": True, "hours": hours, "length": len(text)}

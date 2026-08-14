@@ -32,17 +32,37 @@ def fmt_time(dt: datetime) -> str:
     return dt.strftime("%H:%M")
 
 
-async def send(text: str, markup: dict | None = None, fallback: dict | None = None) -> None:
+async def send(text: str, markup: dict | None = None,
+               fallback: dict | None = None) -> list[tuple[str, int]]:
     """Hisobot matnini barcha qabul qiluvchilarga yuboradi.
 
     `markup` — inline tugmalar. Telegram uni rad etsa (masalan Web App tugmasi
     qo'llab-quvvatlanmasa) `fallback` bilan qayta uriniladi.
+
+    Qaytaradi: yuborilgan xabarlarning `(chat_id, message_id)` ro'yxati —
+    eskalatsiya signalida tugma bosilgach o'sha xabarni tahrirlash uchun
+    kerak («✋ Javob beraman» -> «✅ Javobni siz yozasiz»). Busiz admin
+    tugmani bosgan-bosmaganini xabarning o'zidan bilolmasdi.
     """
     if not REPORT_BOT_TOKEN or not REPORT_CHAT_IDS:
         log.info("Hisobot boti sozlanmagan — yuborilmadi.")
-        return
+        return []
 
+    yuborilgan: list[tuple[str, int]] = []
     url = f"https://api.telegram.org/bot{REPORT_BOT_TOKEN}/sendMessage"
+
+    def _qayd(chat_id, javob) -> bool:
+        try:
+            d = javob.json()
+        except Exception:
+            return False
+        if not d.get("ok"):
+            return False
+        mid = (d.get("result") or {}).get("message_id")
+        if mid:
+            yuborilgan.append((str(chat_id), int(mid)))
+        return True
+
     async with httpx.AsyncClient(timeout=20) as client:
         for chat_id in REPORT_CHAT_IDS:
             payload = {
@@ -55,17 +75,67 @@ async def send(text: str, markup: dict | None = None, fallback: dict | None = No
                 payload["reply_markup"] = markup
             try:
                 r = await client.post(url, json=payload)
-                if r.json().get("ok"):
+                if _qayd(chat_id, r):
                     continue
                 log.warning("Hisobot yuborilmadi (%s): %s", chat_id, r.text[:200])
                 if fallback:
                     payload["reply_markup"] = fallback
                     r2 = await client.post(url, json=payload)
-                    if not r2.json().get("ok"):
+                    if not _qayd(chat_id, r2):
                         payload.pop("reply_markup", None)
-                        await client.post(url, json=payload)
+                        r3 = await client.post(url, json=payload)
+                        _qayd(chat_id, r3)
             except Exception as e:
                 log.warning("Hisobot xatosi (%s): %s", chat_id, e)
+    return yuborilgan
+
+
+async def signal_tugmasini_yangila(kanal: str, uid: str, natija: str) -> None:
+    """Eskalatsiya signalidagi tugmalarni natija yozuviga almashtiradi.
+
+    Admin «✋ Javob beraman» yoki «🤖 AI davom ettirsin» ni bosganda natija
+    Web App oynasida ko'rinardi, lekin GURUHDAGI xabar o'zgarishsiz
+    qolardi: keyin kim qarasa, tugmalar hali ham bosilmagandek turardi va
+    ikkinchi admin qayta bosishi mumkin edi.
+
+    Endi ikkala tugma o'rniga bitta yozuv qoladi — masalan
+    «✅ Qabul qilindi — javobni admin yozadi».
+
+    Nima uchun `editMessageReplyMarkup`, `editMessageText` emas: matnni
+    qayta yuborish uchun uni biror joyda saqlash kerak bo'lardi, xabar esa
+    500+ belgi (`Setting.value` — 255). Tugmani almashtirish uchun faqat
+    xabar manzili yetadi.
+
+    `message_id` `send()` dan olinib `bot.settings` ga yozilgan bo'ladi.
+    """
+    from app.repo import get_setting, set_setting
+
+    kalit = f"esc_msg:{kanal}:{uid}"
+    saqlangan = await get_setting(kalit, "")
+    if not saqlangan or not REPORT_BOT_TOKEN:
+        return
+
+    from app.config import BASE_URL
+
+    # Telegram inline tugmasi `url` siz bo'lolmaydi, shuning uchun zararsiz
+    # manzil qo'yiladi — tugma endi faqat YOZUV vazifasini bajaradi.
+    markup = {"inline_keyboard": [[{"text": natija, "url": f"{BASE_URL}/health"}]]}
+    url = f"https://api.telegram.org/bot{REPORT_BOT_TOKEN}/editMessageReplyMarkup"
+    async with httpx.AsyncClient(timeout=20) as client:
+        for juftlik in saqlangan.split("|"):
+            if ":" not in juftlik:
+                continue
+            chat_id, _, mid = juftlik.rpartition(":")
+            try:
+                await client.post(url, json={
+                    "chat_id": chat_id,
+                    "message_id": int(mid),
+                    "reply_markup": markup,
+                })
+            except Exception as e:
+                log.warning("Signal tugmasini yangilab bo'lmadi: %s", e)
+    # Bir marta ishlatiladi — keyingi signalda yangisi yoziladi.
+    await set_setting(kalit, "")
 
 
 def _action_markups(appt_id: int) -> tuple[dict, dict]:
@@ -193,11 +263,20 @@ async def escalation(
         rows_web.append(chat_row)
         rows_plain.append(chat_row)
 
-    await send(
+    yuborilgan = await send(
         body,
         markup={"inline_keyboard": rows_web},
         fallback={"inline_keyboard": rows_plain},
     )
+
+    # Tugma bosilganda shu xabarning ostiga natija yoziladi va tugmalar
+    # olib tashlanadi (`signal_xabarini_yangila`). Buning uchun xabar
+    # manzili va asl matni saqlanadi — ikkalasi ham `bot.settings` da,
+    # chunki eskalatsiya TG tomonida jadvalga yozilmaydi.
+    if yuborilgan:
+        from app.repo import set_setting
+        await set_setting(f"esc_msg:{channel}:{tg_id}",
+                          "|".join(f"{c}:{m}" for c, m in yuborilgan)[:255])
 
 
 # ─────────────────────────── Yangi murojaat ───────────────────────────
@@ -492,6 +571,95 @@ async def daily_contacts(hours: int = 12) -> str:
     return text
 
 
+async def daily_stats(hours: int = 24) -> str:
+    """Kun yakuni — QISQA raqamlar (shifokorning talabi, 22:00).
+
+    «Raqam qoldirganlar» ro'yxati (08:00 va 20:00) — bu KIM bilan
+    bog'lanish kerakligi. Bu esa boshqa savolga javob beradi: kun qanday
+    o'tdi. Shuning uchun tafsilot yo'q, faqat sonlar:
+
+      · nechta odam yozdi — jami, Telegram va Instagram alohida;
+      · nechtasi raqam qoldirdi;
+      · nechta rasmiy ariza tushdi.
+
+    Odamlar SANALADI, xabarlar emas: bitta bemor 20 marta yozsa ham u
+    bitta odam.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    async with SessionLocal() as s:
+        tg_odam = (await s.execute(
+            select(func.count(func.distinct(ChatMessage.tg_id)))
+            .where(ChatMessage.created_at >= since, ChatMessage.role == "user")
+        )).scalar() or 0
+        appts = list((await s.execute(
+            select(Appointment).where(Appointment.created_at >= since)
+        )).scalars())
+        yangi_user = (await s.execute(
+            select(func.count(User.id)).where(User.created_at >= since)
+        )).scalar() or 0
+        reg_phone = (await s.execute(
+            select(func.count(User.id))
+            .where(User.created_at >= since, User.phone != "")
+        )).scalar() or 0
+        msgs = list((await s.execute(
+            select(ChatMessage)
+            .where(ChatMessage.created_at >= since, ChatMessage.role == "user")
+        )).scalars())
+
+    # Telegram suhbatida raqam yozganlar (arizadagilar takrorlanmaydi)
+    appt_phones = {re.sub(r"\D", "", a.phone or "")[-9:] for a in appts}
+    tg_raqam: set[str] = set()
+    for m in msgs:
+        for phone in find_phones(m.text):
+            oxirgi9 = re.sub(r"\D", "", phone)[-9:]
+            if oxirgi9 and oxirgi9 not in appt_phones:
+                tg_raqam.add(oxirgi9)
+
+    # Instagram tomoni
+    from app import ig_bridge
+
+    ig_odam, ig_raqam = 0, set()
+    try:
+        ig_msgs = await ig_bridge.recent_user_messages(hours=hours)
+        ig_odam = len({m["user_id"] for m in ig_msgs})
+        for m in ig_msgs:
+            for phone in find_phones(m["text"]):
+                oxirgi9 = re.sub(r"\D", "", phone)[-9:]
+                if oxirgi9:
+                    ig_raqam.add(oxirgi9)
+    except Exception as ex:
+        log.warning("Instagram statistikasi olinmadi: %s", ex)
+
+    jami_odam = tg_odam + ig_odam
+    jami_raqam = len(tg_raqam | ig_raqam) + len(appt_phones - {""}) + reg_phone
+
+    now = datetime.utcnow()
+    lines = [
+        "🌙 <b>KUN YAKUNI</b>",
+        f"🗓 {fmt_date(now)} · oxirgi {hours} soat",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"👥 <b>Yozgan odamlar: {jami_odam} ta</b>",
+        f"   💬 Telegram — {tg_odam} ta",
+        f"   📸 Instagram — {ig_odam} ta",
+        "",
+        f"📞 <b>Raqam qoldirganlar: {jami_raqam} ta</b>",
+        f"   📝 Ariza — {len(appts)} ta",
+        f"   👤 Ro‘yxatdan o‘tib kontakt bergan — {reg_phone} ta",
+        f"   💬 Telegram suhbatida — {len(tg_raqam)} ta",
+        f"   📸 Instagram Direct'da — {len(ig_raqam)} ta",
+        "",
+        f"🆕 Yangi foydalanuvchi: {yangi_user} ta",
+    ]
+    if jami_odam == 0:
+        lines.append("\n<i>Bugun murojaat bo‘lmadi.</i>")
+
+    text = "\n".join(lines)
+    await send(text)
+    return text
+
+
 # ─────────────────────────── Kunlik jadval ───────────────────────────
 #  (Toshkent vaqti bilan soat, daqiqa, vazifa nomi, funksiya)
 #
@@ -501,10 +669,15 @@ async def daily_contacts(hours: int = 12) -> str:
 #     20:00 -> bugungi 08:00 dan 20:00 gacha
 #  Ilgari kuniga bir marta 22:00 da edi va kechqurun yozgan mijoz bilan
 #  ertasi kuni bog'lanilardi.
+#  22:00 — kun yakuni: QISQA raqamlar (nechta odam yozdi, TG/IG alohida,
+#  nechtasi raqam qoldirdi). Ilgari bu o'rinda `daily_summary` 20:00 da
+#  turardi; endi 20:00 raqamlar ro'yxatiga ajratilgan va tafsilotli
+#  xulosa ham kun yakuniga ko'chirilgan — ikkovi ketma-ket keladi.
 DAILY_JOBS: list[tuple[int, int, str, object]] = [
     (8,  0, "raqam qoldirganlar (kechasi)",  lambda: daily_contacts(hours=12)),
-    (20, 0, "kunlik xulosa",                 lambda: daily_summary()),
-    (20, 2, "raqam qoldirganlar (kunduzi)",  lambda: daily_contacts(hours=12)),
+    (20, 0, "raqam qoldirganlar (kunduzi)",  lambda: daily_contacts(hours=12)),
+    (22, 0, "kun yakuni — qisqa raqamlar",   lambda: daily_stats(hours=24)),
+    (22, 2, "kunlik xulosa (arizalar)",      lambda: daily_summary()),
 ]
 
 DAILY_HOUR_LOCAL = 20  # eski nom — tashqi skriptlar ishlatishi mumkin
