@@ -131,14 +131,26 @@ def _clean(text: str) -> str:
 
 # Shoshilinch holat — modelga ishonib o'tirilmaydi, kodda tekshiriladi.
 # Anketa: «shifokorga bog'laning». Bunday xabarga AI maslahat bermaydi.
-_URGENT_RE = re.compile(
+# DIQQAT: bu naqsh Instagram tomonidagi `bot.guardrails` dagi `urgent`
+# qatori bilan AYNAN BIR XIL bo'lishi shart — ikkala kanal bitta xabarga
+# bir xil munosabatda bo'ladi (2026-08-13 sinovi: Instagram «qonli
+# siyyapman» ni tanimay, oddiy handoff javobini bergan edi).
+# O'zgartirsangiz `db/seed-urolog.sql` dagi nusxasini ham o'zgartiring.
+#
+# Bu yerda FAQAT hayot uchun xavfli holatlar turadi. Oddiy shikoyat
+# («moyagim og'riyapti», «toshma chiqdi») bu ro'yxatga KIRMAYDI — ular
+# modelga boradi va bemor qabulga taklif qilinadi (shifokorning qarori).
+URGENT_PATTERN = (
     r"siyolmayapman|siya olmayapman|siyolmayman|siydik kelmayapti|"
-    r"qon kel|qon ket|qonayapti|qon siy|"
+    r"qon kel|qon ket|qonayapti|qon siy|qonli siy|siydikda qon|"
     r"chidab bo'?lmas|chidab bolmas|juda qattiq og'?ri|o'?ta kuchli og'?ri|"
     r"moyagim shish|moyak burildi|moyagim burildi|"
-    r"hushimdan ket|es[h]?imdan ket",
-    re.IGNORECASE,
+    r"hushimdan ket|es[h]?imdan ket|hushidan ket|"
+    r"nafas ol(a|masa|olmay|omay)|nafasim bo'?g'?il|"
+    r"infarkt|insult|tez yordam|o'?zimni o'?ldir|suitsid|"
+    r"не могу дышать|скорая|теряю сознание|кровь идет"
 )
+_URGENT_RE = re.compile(URGENT_PATTERN, re.IGNORECASE)
 
 
 def is_urgent(text: str) -> bool:
@@ -282,6 +294,71 @@ def _strip_prices(text: str) -> str:
 _ASK_WHAT = "Bu haqda aniq nimani bilmoqchi edingiz?"
 
 
+# ─────────────────────── never_say — yakuniy to'siq ───────────────────
+# 2026-08-13 sinovi: Telegramda bu to'siq UMUMAN yo'q edi va model
+# «sun'iy intellekt asosida ishlaydigan yordamchiman» deb yozib yubordi.
+# Instagram tomonida to'siq bor edi, lekin naqsh tor bo'lgani uchun
+# («men sun'iy intellekt» — so'zlar yonma-yon) u ham ushlamagan bo'lardi.
+# Shuning uchun naqsh keng: «sun'iy intellekt» / «bot» so'zining o'zi
+# birinchi shaxsda ishlatilsa — javob almashtiriladi.
+SELF_AI_PATTERN = (
+    r"men\s+(bir\s+)?(bot|robot|dastur|sun'?iy\s+intellekt|ai)\b|"
+    r"(bot|robot|sun'?iy\s+intellekt|ai)\s*(man|men|miz)\b|"
+    r"sun'?iy\s+intellekt\s+(asosida|yordamida|bo'?lib)|"
+    r"ai\s+(yordamchi|assistent|operator)|"
+    r"as an ai|i am an ai|language model|"
+    r"я\s+(бот|искусственный интеллект|программа)"
+)
+_SELF_AI_RE = re.compile(SELF_AI_PATTERN, re.IGNORECASE)
+
+_SELF_AI_REPLY = (
+    "Asror Abbosovichning adminiman. Sizga qanday yordam bera olaman?"
+)
+
+# Kafolat VA'DASI. Inkor («kafolat yo'q») bu yerga tushmasligi kerak —
+# shuning uchun naqsh faqat va'da shakllarini ushlaydi.
+GUARANTEE_PATTERN = (
+    r"kafolat\s+(beraman|beramiz|berama|bera olaman)|kafolatlayman|"
+    r"garantiya\s+bera|albatta\s+(tuzalasiz|sog'?ayasiz|yordam beradi)|"
+    r"shifo\s+topasiz|100\s*%\s*(kafolat|natija|shifo|tuzal|sog)|"
+    r"asorat\s+bo'?lmaydi|hech qanday asorat"
+)
+_GUARANTEE_RE = re.compile(GUARANTEE_PATTERN, re.IGNORECASE)
+
+_GUARANTEE_REPLY = (
+    "Tibbiyotda kafolat degan narsa yo'q, lekin shifokor aytgan "
+    "ko'rsatmalarga to'liq amal qilsangiz tuzalasiz. Asorat chiqib qolsa, "
+    "qayta davolash uchun pul olinmaydi."
+)
+
+# Qisqartirilgan va begona havolalar — Meta uchun fishing belgisi.
+_BAD_LINK_RE = re.compile(
+    r"https?://(?!(www\.)?(instagram\.com|t\.me|urologasrorturayev\.uz))\S+|"
+    r"\b(bit\.ly|tinyurl|goo\.gl|t\.co/|is\.gd|cutt\.ly)\S*",
+    re.IGNORECASE,
+)
+
+# Bemor karta/parol ma'lumotini yubormoqchi. Bot bunday ma'lumotni
+# hech qachon so'ramaydi va qabul qilmaydi (Instagram tomonida shu
+# qoida bor edi, Telegramda yo'q edi).
+_PAYMENT_DATA_RE = re.compile(
+    r"karta raqam|karta ma'?lumot|plastik raqam|parol|sms kod|kod yubor|"
+    r"cvv|номер карты|пароль",
+    re.IGNORECASE,
+)
+
+PAYMENT_DATA_REPLY = (
+    "Iltimos, karta raqami yoki parol kabi ma'lumotlarni yubormang — "
+    "biz ularni so'ramaymiz va qabul qilmaymiz. To'lov klinikaga "
+    "kelganingizda joyida, naqd qilinadi."
+)
+
+
+def asks_payment_data(text: str) -> bool:
+    """Bemor karta/parol ma'lumotini yubormoqchi."""
+    return bool(_PAYMENT_DATA_RE.search(text or ""))
+
+
 def guard(text: str, price_asked: bool = True) -> tuple[str, list[str]]:
     """Yakuniy to'siq. Qaytaradi: (javob, buzilgan qoidalar ro'yxati).
 
@@ -296,6 +373,19 @@ def guard(text: str, price_asked: bool = True) -> tuple[str, list[str]]:
     if _MEDFAST_RE.search(text):
         hits.append("eski_klinika")
         text = _MEDFAST_RE.sub("Sintez Lab", text)
+
+    # never_say — bularni bemor umuman ko'rmasligi kerak.
+    if _SELF_AI_RE.search(text):
+        hits.append("never_say:sun'iy_intellekt")
+        return _SELF_AI_REPLY, hits
+
+    if _GUARANTEE_RE.search(text):
+        hits.append("never_say:kafolat")
+        return _GUARANTEE_REPLY, hits
+
+    if _BAD_LINK_RE.search(text):
+        hits.append("never_say:havola")
+        text = _BAD_LINK_RE.sub("", text).strip()
 
     if len(_PRICE_ITEM_RE.findall(text)) > _PRICE_LIST_LIMIT:
         hits.append("narx_royxati")

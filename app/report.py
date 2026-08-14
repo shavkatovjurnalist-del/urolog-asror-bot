@@ -387,6 +387,24 @@ async def daily_contacts(days: int = 1) -> str:
             if label not in from_chat[phone]:
                 from_chat[phone].append(label)
 
+    # Instagram tomoni. 2026-08-13 gacha bu ro'yxat faqat Telegram
+    # manbalaridan yig'ilardi va Instagramda raqam qoldirgan mijoz hech
+    # qayerda ko'rinmasdi — shifokor uni butunlay yo'qotardi.
+    from app import ig_bridge
+
+    from_ig: dict[str, list[str]] = {}
+    try:
+        for m in await ig_bridge.recent_user_messages(days):
+            for phone in find_phones(m["text"]):
+                if re.sub(r"\D", "", phone)[-9:] in appt_phones:
+                    continue
+                label = m["who"] or f"ig:{m['user_id']}"
+                from_ig.setdefault(phone, [])
+                if label not in from_ig[phone]:
+                    from_ig[phone].append(label)
+    except Exception as ex:
+        log.warning("Instagram raqamlarini o'qib bo'lmadi: %s", ex)
+
     now = datetime.utcnow()
     lines = [
         "📞 <b>BUGUN RAQAM QOLDIRGANLAR</b>",
@@ -404,12 +422,23 @@ async def daily_contacts(days: int = 1) -> str:
             )
 
     if from_chat:
-        lines.append(f"\n\n💬 <b>Suhbatda raqam yozganlar — {len(from_chat)} ta</b>")
+        lines.append(f"\n\n💬 <b>Telegram suhbatida raqam yozganlar — "
+                     f"{len(from_chat)} ta</b>")
         lines.append("<i>Bular ariza qoldirmagan — o'zingiz bog'lanishingiz kerak.</i>")
         for phone, whos in from_chat.items():
             lines.append(f"\n<b>{escape(', '.join(whos))}</b>\n   📱 <code>{phone}</code>")
 
-    if not appts and not from_chat:
+    if from_ig:
+        lines.append(f"\n\n📸 <b>Instagramda raqam yozganlar — {len(from_ig)} ta</b>")
+        lines.append("<i>Direct orqali yozganlar — ariza qoldirmagan.</i>")
+        for phone, whos in from_ig.items():
+            lines.append(f"\n<b>{escape(', '.join(whos))}</b>\n   📱 <code>{phone}</code>")
+
+    if appts or from_chat or from_ig:
+        jami = len(appts) + len(from_chat) + len(from_ig)
+        lines.append(f"\n\n━━━━━━━━━━━━━━━━━━━━\n<b>Jami ehtimoliy mijoz: "
+                     f"{jami} ta</b>")
+    else:
         lines.append("\nBugun hech kim raqam qoldirmadi.")
 
     text = "\n".join(lines)

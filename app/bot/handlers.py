@@ -541,10 +541,10 @@ async def live_to_booking(message: Message, state: FSMContext) -> None:
 # uzun yozuv so'rovni og'irlashtiradi va javobni kechiktiradi.
 MAX_VOICE_BYTES = 8 * 1024 * 1024
 
+# Shifokorning qarori (2026-08-13): rasmni AI «ko'rdim» demaydi — u
+# adminga uzatiladi va javobni odam yozadi.
 RASM_JAVOBI = (
-    "Rasmni oldim, Asror Abbosovichga yetkazaman. Faqat shuni aytib qo'yay — "
-    "shifokor ko'pincha masofadan turib tashxis qo'ymaydi, aniq javob uchun "
-    "ko'rikdan o'tish kerak bo'ladi."
+    "Boshqa adminga xabar berildi — rasmni ko'rib, javobini aytadi."
 )
 
 OVOZ_TUSHUNARSIZ = (
@@ -671,6 +671,20 @@ async def _handle_patient_text(
         await message.answer(persona.HANDOFF, reply_markup=kb.live_chat_kb())
         await support.relay_ai(message.bot, tg_id, persona.HANDOFF)
         await _escalate(message, state, "Bemor boshqa admin so'radi", text, wait=True)
+        return
+
+    # 4b. Bemor karta raqami / parol yubormoqchi. Modelga berilmaydi —
+    #     javob qat'iy va bir xil bo'lishi kerak (Instagram tomonida bu
+    #     qoida bor edi, Telegramda yo'q edi — 2026-08-13 sinovi).
+    if ai.asks_payment_data(text):
+        async with session_scope() as s:
+            await repo.add_chat_message(s, tg_id, "user", text, flags="karta_soradi")
+            await repo.add_chat_message(
+                s, tg_id, "model", ai.PAYMENT_DATA_REPLY, flags="karta_soradi"
+            )
+        await message.answer(ai.PAYMENT_DATA_REPLY, reply_markup=kb.live_chat_kb())
+        await support.relay_ai(message.bot, tg_id, ai.PAYMENT_DATA_REPLY)
+        await _escalate(message, state, "💳 Karta/parol ma'lumoti so'raldi", text)
         return
 
     # 5. Suhbat tarixi bilan modelga

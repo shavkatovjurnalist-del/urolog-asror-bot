@@ -65,7 +65,53 @@ REASONS = {
     "rate_limit_hour": "Soatlik limit to'ldi",
     "rate_limit_day": "Kunlik limit to'ldi",
     "human_detected": "Suhbatga odam javob yozdi",
+    "queue_full": "Navbat to'lgan — javobni odam yozishi kerak",
+    "stuck": "⚠️ XABAR JAVOBSIZ QOLDI — n8n bajarilishi uzilgan",
 }
+
+
+async def sweep_stuck_events(older_than_minutes: int = 10) -> int:
+    """Javobsiz qolib ketgan xabarlarni topib adminga uzatadi.
+
+    Nima uchun kerak: n8n har xabarni alohida bajarilish qilib ishlaydi va
+    javob berishdan oldin navbat slotini kutadi. Bajarilish uzilib qolsa
+    (servis qayta ishga tushdi, xotira yetmadi, ulanish uzildi) hodisa
+    `bot.events` da `processing` holatida abadiy qolib ketadi — mijoz esa
+    javobsiz. 2026-08-13 sinovida 62 ta DM bir to'lqinda kelganda aynan
+    shunday bo'ldi: 29 tasi yo'qoldi va hech kim buni bilmadi.
+
+    Shifokorning talabi: hech qaysi mijoz javobsiz qolmasligi kerak.
+    Shuning uchun bu supurgi har daqiqada qotib qolganlarni signalga
+    aylantiradi — javobni odam yozadi.
+    """
+    if not enabled():
+        return 0
+    pool = await _conn()
+    async with pool.acquire() as c:
+        rows = await c.fetch(
+            """
+            WITH qotgan AS (
+                UPDATE bot.events
+                   SET status = 'escalated', reason = 'stuck'
+                 WHERE status = 'processing'
+                   AND channel = 'instagram'
+                   AND user_id IS NOT NULL
+                   AND received_at < now() - ($1 || ' minutes')::interval
+                RETURNING event_key, channel, user_id, payload
+            )
+            INSERT INTO bot.escalations
+                   (channel, user_id, event_key, reason, severity, user_text)
+            SELECT channel, user_id, event_key, 'stuck', 'urgent',
+                   NULLIF(payload ->> 'text', '')
+              FROM qotgan
+            RETURNING id
+            """,
+            str(older_than_minutes),
+        )
+    if rows:
+        log.warning("Javobsiz qolgan %d ta Instagram xabari adminga uzatildi",
+                    len(rows))
+    return len(rows)
 
 
 def reason_text(code: str) -> str:
@@ -107,6 +153,35 @@ async def fetch_new_escalations(limit: int = 10) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+async def recent_user_messages(days: int = 1) -> list[dict]:
+    """Instagram bemorlari oxirgi kunlarda yozgan xabarlar.
+
+    Kunlik «raqam qoldirganlar» ro'yxati uchun. 2026-08-13 gacha bu ro'yxat
+    faqat Telegram manbalaridan yig'ilardi — Instagramda raqam qoldirgan
+    mijoz hech qayerda ko'rinmasdi va yo'qolib ketardi.
+    """
+    if not enabled():
+        return []
+    pool = await _conn()
+    async with pool.acquire() as c:
+        rows = await c.fetch(
+            """
+            SELECT m.user_id, m.text,
+                   COALESCE(NULLIF(c.display_name, ''),
+                            NULLIF(c.username, '')) AS who
+              FROM bot.messages m
+              LEFT JOIN bot.contacts c
+                ON c.channel = 'instagram' AND c.user_id = m.user_id
+             WHERE m.channel = 'instagram'
+               AND m.role = 'user'
+               AND m.created_at > now() - ($1 || ' days')::interval
+             ORDER BY m.created_at
+            """,
+            str(days),
+        )
+    return [dict(r) for r in rows]
+
+
 async def escalation_watcher() -> None:
     """Instagram signallarini Telegramga uzatadi — Telegramnikiga o'xshash.
 
@@ -123,6 +198,9 @@ async def escalation_watcher() -> None:
     while True:
         await asyncio.sleep(30)
         try:
+            # Avval qotib qolganlarni signalga aylantiramiz — shu aylanishning
+            # o'zida ular ham adminga ketadi.
+            await sweep_stuck_events()
             for e in await fetch_new_escalations():
                 uid = str(e["user_id"])
                 await report.escalation(
