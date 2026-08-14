@@ -153,15 +153,21 @@ async def fetch_new_escalations(limit: int = 10) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-async def recent_user_messages(days: int = 1) -> list[dict]:
-    """Instagram bemorlari oxirgi kunlarda yozgan xabarlar.
+async def recent_user_messages(hours: int = 12, days: int | None = None) -> list[dict]:
+    """Instagram bemorlari oxirgi N soatda yozgan xabarlar.
 
-    Kunlik «raqam qoldirganlar» ro'yxati uchun. 2026-08-13 gacha bu ro'yxat
-    faqat Telegram manbalaridan yig'ilardi — Instagramda raqam qoldirgan
-    mijoz hech qayerda ko'rinmasdi va yo'qolib ketardi.
+    «Raqam qoldirganlar» ro'yxati uchun. 2026-08-13 gacha bu ro'yxat faqat
+    Telegram manbalaridan yig'ilardi — Instagramda raqam qoldirgan mijoz
+    hech qayerda ko'rinmasdi va yo'qolib ketardi.
+
+    2026-08-14 dan ro'yxat kuniga IKKI MARTA (08:00 va 20:00) yuboriladi,
+    shuning uchun oraliq SOATLARDA beriladi. `days` — eski chaqiruvlar
+    buzilmasligi uchun qoldirilgan.
     """
     if not enabled():
         return []
+    if days is not None:
+        hours = int(days) * 24
     pool = await _conn()
     async with pool.acquire() as c:
         rows = await c.fetch(
@@ -174,10 +180,10 @@ async def recent_user_messages(days: int = 1) -> list[dict]:
                 ON c.channel = 'instagram' AND c.user_id = m.user_id
              WHERE m.channel = 'instagram'
                AND m.role = 'user'
-               AND m.created_at > now() - ($1 || ' days')::interval
+               AND m.created_at > now() - ($1 || ' hours')::interval
              ORDER BY m.created_at
             """,
-            str(days),
+            str(hours),
         )
     return [dict(r) for r in rows]
 

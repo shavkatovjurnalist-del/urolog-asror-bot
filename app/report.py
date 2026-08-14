@@ -345,14 +345,25 @@ def find_phones(text: str) -> list[str]:
     return out
 
 
-async def daily_contacts(days: int = 1) -> str:
-    """Bugun raqam qoldirgan mijozlar — shifokorning talabi bo'yicha 22:00 da.
+async def daily_contacts(hours: int = 12) -> str:
+    """Oxirgi N soatda raqam qoldirgan mijozlar.
 
-    Ikki manba: rasmiy arizalar va jonli suhbatda «kelaman» deb raqamini
-    yozib qoldirganlar. Ikkinchisi arizaga aylanmaydi, lekin shifokor uchun
-    aynan shular qimmatli — ular hech qayerda hisobga olinmasdi.
+    Shifokorning talabi (2026-08-14): kuniga IKKI MARTA — ertalab 08:00 va
+    kechqurun 20:00, har biri oldingi 12 soatlik oraliqni qamraydi. Ilgari
+    kuniga bir marta 22:00 da yuborilardi: kechqurun yozgan mijoz ertasi
+    kuni ko'rilardi va bog'lanish bir sutkaga kechikardi.
+
+    TO'RT manba — raqam qoldirishning hamma yo'li:
+      1. rasmiy ariza (`Appointment`);
+      2. botda yoki Mini App'da ro'yxatdan o'tib kontakt bergan (`User.phone`)
+         — 2026-08-14 gacha bu manba ro'yxatga UMUMAN kirmasdi;
+      3. Telegram suhbatida raqamini yozib qoldirgan (`ChatMessage`);
+      4. Instagram Direct'da raqam yozgan (`ig_bridge`).
+
+    Takrorlanish yo'q: bir raqam bir marta ko'rsatiladi, eng «rasmiy»
+    manbasi bo'yicha (ariza > ro'yxat > suhbat > Instagram).
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.utcnow() - timedelta(hours=hours)
 
     async with SessionLocal() as s:
         appts = list((await s.execute(
@@ -367,14 +378,35 @@ async def daily_contacts(days: int = 1) -> str:
         users = {
             u.tg_id: u for u in (await s.execute(select(User))).scalars() if u.tg_id
         }
+        # Ro'yxatdan o'tib kontakt bergan — shu oraliqda kelganlar.
+        yangi_users = list((await s.execute(
+            select(User).where(User.created_at >= since, User.phone != "")
+            .order_by(User.created_at)
+        )).scalars())
 
     appt_phones = {re.sub(r"\D", "", a.phone or "")[-9:] for a in appts}
 
-    # Suhbatda raqam yozganlar — arizada bori takrorlanmaydi.
+    # 2-manba: ro'yxatdan o'tganlar. Arizada bori takrorlanmaydi.
+    from_reg: dict[str, list[str]] = {}
+    for u in yangi_users:
+        oxirgi9 = re.sub(r"\D", "", u.phone or "")[-9:]
+        if not oxirgi9 or oxirgi9 in appt_phones:
+            continue
+        who = " ".join(x for x in (u.first_name, u.last_name) if x).strip()
+        if u.username:
+            who = f"{who} (@{u.username})".strip()
+        label = who or f"id{u.tg_id}"
+        from_reg.setdefault(u.phone, [])
+        if label not in from_reg[u.phone]:
+            from_reg[u.phone].append(label)
+    reg_phones = {re.sub(r"\D", "", p)[-9:] for p in from_reg}
+
+    # Suhbatda raqam yozganlar — ariza va ro'yxatda bori takrorlanmaydi.
     from_chat: dict[str, list[str]] = {}
     for m in msgs:
         for phone in find_phones(m.text):
-            if re.sub(r"\D", "", phone)[-9:] in appt_phones:
+            oxirgi9 = re.sub(r"\D", "", phone)[-9:]
+            if oxirgi9 in appt_phones or oxirgi9 in reg_phones:
                 continue
             u = users.get(m.tg_id)
             who = " ".join(
@@ -393,10 +425,13 @@ async def daily_contacts(days: int = 1) -> str:
     from app import ig_bridge
 
     from_ig: dict[str, list[str]] = {}
+    chat_phones = {re.sub(r"\D", "", p)[-9:] for p in from_chat}
     try:
-        for m in await ig_bridge.recent_user_messages(days):
+        for m in await ig_bridge.recent_user_messages(hours=hours):
             for phone in find_phones(m["text"]):
-                if re.sub(r"\D", "", phone)[-9:] in appt_phones:
+                oxirgi9 = re.sub(r"\D", "", phone)[-9:]
+                if oxirgi9 in appt_phones or oxirgi9 in reg_phones \
+                        or oxirgi9 in chat_phones:
                     continue
                 label = m["who"] or f"ig:{m['user_id']}"
                 from_ig.setdefault(phone, [])
@@ -405,10 +440,14 @@ async def daily_contacts(days: int = 1) -> str:
     except Exception as ex:
         log.warning("Instagram raqamlarini o'qib bo'lmadi: %s", ex)
 
+    from app.bot.calendar import TZ_OFFSET
+
     now = datetime.utcnow()
+    boshi = (since + TZ_OFFSET).strftime("%H:%M")
+    oxiri = (now + TZ_OFFSET).strftime("%H:%M")
     lines = [
-        "📞 <b>BUGUN RAQAM QOLDIRGANLAR</b>",
-        f"🗓 {fmt_date(now)}",
+        "📞 <b>RAQAM QOLDIRGANLAR</b>",
+        f"🗓 {fmt_date(now)} · <b>{boshi} – {oxiri}</b> oralig‘i",
         "━━━━━━━━━━━━━━━━━━━━",
     ]
 
@@ -420,6 +459,12 @@ async def daily_contacts(days: int = 1) -> str:
                 f"   📱 <code>{escape(a.phone)}</code>\n"
                 f"   🕐 {escape(a.preferred_time or 'vaqt ko‘rsatilmagan')}"
             )
+
+    if from_reg:
+        lines.append(f"\n\n📝 <b>Ro‘yxatdan o‘tganlar — {len(from_reg)} ta</b>")
+        lines.append("<i>Botda yoki Mini App'da kontakt bergan, ariza qoldirmagan.</i>")
+        for phone, whos in from_reg.items():
+            lines.append(f"\n<b>{escape(', '.join(whos))}</b>\n   📱 <code>{escape(phone)}</code>")
 
     if from_chat:
         lines.append(f"\n\n💬 <b>Telegram suhbatida raqam yozganlar — "
@@ -434,12 +479,12 @@ async def daily_contacts(days: int = 1) -> str:
         for phone, whos in from_ig.items():
             lines.append(f"\n<b>{escape(', '.join(whos))}</b>\n   📱 <code>{phone}</code>")
 
-    if appts or from_chat or from_ig:
-        jami = len(appts) + len(from_chat) + len(from_ig)
+    if appts or from_reg or from_chat or from_ig:
+        jami = len(appts) + len(from_reg) + len(from_chat) + len(from_ig)
         lines.append(f"\n\n━━━━━━━━━━━━━━━━━━━━\n<b>Jami ehtimoliy mijoz: "
                      f"{jami} ta</b>")
     else:
-        lines.append("\nBugun hech kim raqam qoldirmadi.")
+        lines.append(f"\n{boshi} – {oxiri} oralig‘ida hech kim raqam qoldirmadi.")
 
     text = "\n".join(lines)
     for chunk in [text[i:i + 3900] for i in range(0, len(text), 3900)]:
@@ -448,20 +493,35 @@ async def daily_contacts(days: int = 1) -> str:
 
 
 # ─────────────────────────── Kunlik jadval ───────────────────────────
-# (Toshkent vaqti bilan soat, vazifa nomi, funksiya)
-DAILY_JOBS: list[tuple[int, str, object]] = [
-    (20, "kunlik xulosa", lambda: daily_summary()),
-    (22, "raqam qoldirganlar", lambda: daily_contacts()),
+#  (Toshkent vaqti bilan soat, daqiqa, vazifa nomi, funksiya)
+#
+#  «Raqam qoldirganlar» kuniga IKKI MARTA yuboriladi — shifokorning talabi
+#  (2026-08-14). Har biri oldingi 12 soatni qamraydi:
+#     08:00 -> kechagi 20:00 dan bugungi 08:00 gacha
+#     20:00 -> bugungi 08:00 dan 20:00 gacha
+#  Ilgari kuniga bir marta 22:00 da edi va kechqurun yozgan mijoz bilan
+#  ertasi kuni bog'lanilardi.
+DAILY_JOBS: list[tuple[int, int, str, object]] = [
+    (8,  0, "raqam qoldirganlar (kechasi)",  lambda: daily_contacts(hours=12)),
+    (20, 0, "kunlik xulosa",                 lambda: daily_summary()),
+    (20, 2, "raqam qoldirganlar (kunduzi)",  lambda: daily_contacts(hours=12)),
 ]
 
 DAILY_HOUR_LOCAL = 20  # eski nom — tashqi skriptlar ishlatishi mumkin
 
 
 async def daily_scheduler() -> None:
-    """Belgilangan soatlarda kunlik xabarlarni yuboradi.
+    """Belgilangan vaqtlarda kunlik xabarlarni yuboradi.
 
     Servis uyquda bo'lsa o'sha vazifa o'tkazib yuboriladi — shuning uchun
     `/health` ni tashqi cron bilan uyg'oq tutish tavsiya etiladi.
+
+    ⚠️ Ilgari bu sikl faqat ENG YAQIN bitta vazifani bajarardi va undan
+    keyin 61 soniya kutardi. Natijada bir soatga ikkita vazifa qo'yilsa
+    (masalan 20:00 da xulosa va raqamlar ro'yxati) ikkinchisi o'sha kuni
+    UMUMAN yuborilmasdi — sikl qaytganda o'sha vaqt allaqachon o'tgan
+    bo'lardi va u ertangi kunga suriladi. Shu sababdan vazifalar
+    daqiqa bilan beriladi va har biri alohida navbatda bajariladi.
     """
     import asyncio
 
@@ -469,20 +529,24 @@ async def daily_scheduler() -> None:
 
     while True:
         now = datetime.utcnow() + TZ_OFFSET
-        # Eng yaqin vazifani tanlaymiz.
         best: tuple[datetime, str, object] | None = None
-        for hour, name, job in DAILY_JOBS:
-            target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        for hour, minute, name, job in DAILY_JOBS:
+            target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if target <= now:
                 target += timedelta(days=1)
             if best is None or target < best[0]:
                 best = (target, name, job)
 
         target, name, job = best  # type: ignore[misc]
-        await asyncio.sleep((target - now).total_seconds())
+        kutish = (target - now).total_seconds()
+        log.info("keyingi kunlik vazifa: «%s» %s da (%.0f daqiqadan keyin)",
+                 name, target.strftime("%H:%M"), kutish / 60)
+        await asyncio.sleep(kutish)
         try:
             await job()  # type: ignore[operator]
         except Exception as e:
             log.warning("«%s» yuborilmadi: %s", name, e)
-        # Bir daqiqa kutamiz, aks holda o'sha soat ichida qayta ishga tushadi.
-        await asyncio.sleep(61)
+        # Bir daqiqadan kamroq kutamiz: keyingi vazifa 2 daqiqadan keyin
+        # bo'lishi mumkin (20:00 va 20:02), lekin o'sha soniyada qayta
+        # ishga tushib ketmasligi ham kerak.
+        await asyncio.sleep(31)

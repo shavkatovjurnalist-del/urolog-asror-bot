@@ -351,3 +351,23 @@ async def daily_report(key: str = "") -> dict:
         raise HTTPException(403, "Kalit noto'g'ri")
     text = await report.daily_summary()
     return {"ok": True, "length": len(text)}
+
+
+@router.get("/report/contacts")
+async def contacts_report(key: str = "", hours: int = 12) -> dict:
+    """«Raqam qoldirganlar» ro'yxatini hisobot botiga yuboradi.
+
+    Servisning o'z jadvali (`report.daily_scheduler`) buni 08:00 va 20:00 da
+    o'zi yuboradi. Bu endpoint — ZAXIRA yo'l: servis deploy yoki uzilish
+    tufayli o'sha daqiqada qayta ishga tushgan bo'lsa, jadval o'sha vazifani
+    o'tkazib yuboradi. Tashqi cron bilan chaqirilsa ro'yxat baribir keladi.
+
+    cron-job.org: har kuni 08:00 va 20:00 (Toshkent)
+      https://<servis>.onrender.com/api/report/contacts?key=<WEBHOOK_SECRET>
+    """
+    from app.config import WEBHOOK_SECRET
+
+    if key != WEBHOOK_SECRET:
+        raise HTTPException(403, "Kalit noto'g'ri")
+    text = await report.daily_contacts(hours=max(1, min(int(hours), 168)))
+    return {"ok": True, "hours": hours, "length": len(text)}
