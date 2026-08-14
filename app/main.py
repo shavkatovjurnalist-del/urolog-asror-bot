@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from aiogram.types import MenuButtonCommands, Update
@@ -119,7 +120,17 @@ async def operator_webhook(request: Request) -> Response:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"ok": True}
+    """Servis tirikligi + qaysi commit ishlab turgani.
+
+    Commit'siz bu endpoint deploy o'tganini tekshirishga yaramasdi:
+    tashqaridan qarab, Render eski kodni yuritayotganini bilib bo'lmasdi
+    (2026-08-14 da shu masala chiqdi). `RENDER_GIT_COMMIT` ni Render har
+    deployda o'zi beradi; lokalda bo'sh bo'ladi.
+    """
+    return {
+        "ok": True,
+        "commit": (os.getenv("RENDER_GIT_COMMIT") or "local")[:7],
+    }
 
 
 @app.get("/")
