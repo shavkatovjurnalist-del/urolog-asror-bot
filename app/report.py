@@ -660,6 +660,33 @@ async def daily_stats(hours: int = 24) -> str:
     return text
 
 
+async def eski_yozishmalarni_tozalash(kun: int = 365) -> int:
+    """1 yildan eski yozishmalarni o'chiradi.
+
+    Nima uchun: Meta Platform Terms ma'lumotni «kerakli muddatdan uzoq
+    saqlamaslikni» talab qiladi, bu jadval esa 2026-08-14 gacha umuman
+    tozalanmasdi. AI xotirasi uchun bir yil ortig'i bilan yetadi —
+    kontekstga faqat oxirgi bir necha xabar olinadi, o'qitish uchun esa
+    suhbatlar `AI_brain/chatlar/` ga eksport qilinadi (kunlik, avtomat).
+
+    `users`, `appointments`, `consultations` TEGILMAYDI: ular mijoz
+    tarixi va buxgalteriya, xabar emas.
+
+    Instagram tomonida xuddi shu ish `tokenCheck0001` workflow'ida.
+    """
+    from sqlalchemy import delete
+
+    chegara = datetime.utcnow() - timedelta(days=kun)
+    async with SessionLocal() as s:
+        r = await s.execute(
+            delete(ChatMessage).where(ChatMessage.created_at < chegara))
+        await s.commit()
+    n = r.rowcount or 0
+    if n:
+        log.info("Arxiv tozalandi: %s ta eski xabar o'chirildi (%s kundan eski)", n, kun)
+    return n
+
+
 # ─────────────────────────── Kunlik jadval ───────────────────────────
 #  (Toshkent vaqti bilan soat, daqiqa, vazifa nomi, funksiya)
 #
@@ -678,6 +705,8 @@ DAILY_JOBS: list[tuple[int, int, str, object]] = [
     (20, 0, "raqam qoldirganlar (kunduzi)",  lambda: daily_contacts(hours=12)),
     (22, 0, "kun yakuni — qisqa raqamlar",   lambda: daily_stats(hours=24)),
     (22, 2, "kunlik xulosa (arizalar)",      lambda: daily_summary()),
+    # Eng kam yuklama vaqtida — 1 yildan eski yozishmalar o'chiriladi.
+    (3,  0, "eski yozishmalarni tozalash",   lambda: eski_yozishmalarni_tozalash(365)),
 ]
 
 DAILY_HOUR_LOCAL = 20  # eski nom — tashqi skriptlar ishlatishi mumkin
