@@ -90,11 +90,29 @@ async def sweep_stuck_events(older_than_minutes: int = 10) -> int:
     async with pool.acquire() as c:
         rows = await c.fetch(
             """
-            WITH qotgan AS (
+            WITH echo_yopildi AS (
+                -- `echo` — bu MIJOZNING xabari emas, bizning o'zimiznikining
+                -- qaytgani (yoki admin qo'lda yozgani). Unga javob berish
+                -- shart emas, shuning uchun u «javobsiz qolgan xabar» ham
+                -- emas. Ishlanmay qolsa shunchaki yopiladi.
+                --
+                -- 2026-08-15: shifokor 62 odamga ommaviy xabar yubordi,
+                -- Instagram hammasini echo qilib qaytardi, ular yuk ostida
+                -- ishlanmay qoldi va admin «XABAR JAVOBSIZ QOLDI» degan
+                -- 20 ta soxta signal oldi.
+                UPDATE bot.events
+                   SET status = 'done', reason = 'echo_stuck'
+                 WHERE status = 'processing'
+                   AND channel = 'instagram'
+                   AND surface = 'echo'
+                   AND received_at < now() - ($1 || ' minutes')::interval
+            ),
+            qotgan AS (
                 UPDATE bot.events
                    SET status = 'escalated', reason = 'stuck'
                  WHERE status = 'processing'
                    AND channel = 'instagram'
+                   AND surface <> 'echo'
                    AND user_id IS NOT NULL
                    AND received_at < now() - ($1 || ' minutes')::interval
                 RETURNING event_key, channel, user_id, payload
