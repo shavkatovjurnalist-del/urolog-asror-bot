@@ -246,9 +246,12 @@ CLINICS = [
         name="Sintez Lab Klinikasi",
         address="Samarqand shahar, Laxuti ko'chasi, 2A",
         landmark="Mo'ljal: 6-hammom, Brilliant City",
-        map_url="https://yandex.uz/maps/-/CTAduM2O",
-        # Yandex qisqa havolasidan olingan aniq koordinata
-        latitude=39.661389, longitude=66.945694,
+        map_url="https://yandex.ru/maps/-/CTcgnT1Q",
+        # Yandex tashkilot sahifasidan olingan aniq koordinata
+        # (yandex.uz/maps/org/sintez_lab/187265516290).
+        # 2026-08-15 da tuzatildi: avvalgi qiymat ~1.5 km xato edi
+        # va bot lokatsiyani noto'g'ri joyga yuborardi.
+        latitude=39.675231, longitude=66.950035,
         photo="/app/assets/clinic3.webp",
         work_hours="Dush–Ju, 09:00 – 16:00",
     ),

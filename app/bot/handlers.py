@@ -179,7 +179,7 @@ async def method_detail(cq: CallbackQuery) -> None:
     await cq.answer()
 
 
-# ─────────────────────────── Qabul joylari ───────────────────────────
+# ───────────────────────────── Lokatsiya ─────────────────────────────
 @router.message(F.text == kb.BTN_CLINICS)
 async def clinics_list(message: Message) -> None:
     async with session_scope() as s:
